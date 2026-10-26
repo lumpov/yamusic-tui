@@ -119,7 +119,7 @@ static void registerMediaKeyMonitor(void) {
 static void runCocoaMain(void) {
     @autoreleasepool {
         NSApplication *app = [NSApplication sharedApplication];
-        [app setActivationPolicy:NSApplicationActivationPolicyProhibited];
+        [app setActivationPolicy:NSApplicationActivationPolicyRegular];
         setupRemoteCommandCenter();
         registerMediaKeyMonitor();
         claimNowPlaying();

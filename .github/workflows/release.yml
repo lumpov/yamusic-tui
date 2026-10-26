@@ -83,3 +83,52 @@ jobs:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ github.ref }}
         overwrite: true
+
+  macos:
+    name: Release darwin-${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: macos-latest
+            goarch: arm64
+          - runner: macos-15-intel
+            goarch: amd64
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+
+    - name: Build darwin-${{ matrix.goarch }}
+      run: go build -trimpath -ldflags="-w -s -linkmode=external" -o yamusic-darwin-${{ matrix.goarch }}
+      env:
+        CGO_ENABLED: "1"
+        GOOS: darwin
+        GOARCH: ${{ matrix.goarch }}
+    - name: Upload darwin-${{ matrix.goarch }}
+      uses: svenstaro/upload-release-action@v2
+      with:
+        file: yamusic-darwin-${{ matrix.goarch }}
+        asset_name: yamusic-darwin-${{ matrix.goarch }}
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        tag: ${{ github.ref }}
+        overwrite: true
+
+    - name: Build darwin-${{ matrix.goarch }}-nomedia
+      run: go build -trimpath -ldflags="-w -s -linkmode=external" -tags=nomedia -o yamusic-darwin-${{ matrix.goarch }}-nomedia
+      env:
+        CGO_ENABLED: "1"
+        GOOS: darwin
+        GOARCH: ${{ matrix.goarch }}
+    - name: Upload darwin-${{ matrix.goarch }}-nomedia
+      uses: svenstaro/upload-release-action@v2
+      with:
+        file: yamusic-darwin-${{ matrix.goarch }}-nomedia
+        asset_name: yamusic-darwin-${{ matrix.goarch }}-nomedia
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        tag: ${{ github.ref }}
+        overwrite: true

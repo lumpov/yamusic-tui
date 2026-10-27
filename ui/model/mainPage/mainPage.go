@@ -186,7 +186,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.tracklist.Shufflable = (selectedPlaylist.Kind != playlist.NONE && selectedPlaylist.Kind != playlist.MYWAVE && len(selectedPlaylist.Tracks) > 0)
 		case playlist.RENAME:
 			selectedPlaylist := m.playlists.SelectedItem()
-			if selectedPlaylist.Kind < playlist.USER {
+			if selectedPlaylist == nil || selectedPlaylist.Kind < playlist.USER {
 				break
 			}
 			m.inputDialog.Title = "Rename playlist " + selectedPlaylist.Name
@@ -204,6 +204,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		case tracklist.CURSOR_UP, tracklist.CURSOR_DOWN:
 			currentPlaylist := m.playlists.SelectedItem()
+			if currentPlaylist == nil {
+				break
+			}
 			cursorIndex := m.tracklist.Index()
 			currentPlaylist.SelectedTrack = cursorIndex
 			cmd = m.playlists.SetItem(m.playlists.Index(), currentPlaylist)
@@ -237,12 +240,18 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 			selectedTrack := m.tracklist.SelectedItem()
+			if selectedTrack.Track == nil {
+				break
+			}
 			m.searchDialog.Title = "Add " + selectedTrack.Track.Title + " to"
 			m.searchDialog.Action = "add"
 			m.isAddPlaylistActive = true
 			m.Send(search.UPDATE_SUGGESTIONS)
 		case tracklist.REMOVE_FROM_PLAYLIST:
 			selectedPlaylist := m.playlists.SelectedItem()
+			if selectedPlaylist == nil {
+				break
+			}
 			cmd = m.removeFromPlaylist(selectedPlaylist, m.tracklist.Index())
 			cmds = append(cmds, cmd)
 		case tracklist.SEARCH:
@@ -263,6 +272,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tracklist.BACK:
 			selectedPlaylist := m.playlists.SelectedItem()
+			if selectedPlaylist == nil {
+				break
+			}
 			if len(selectedPlaylist.Albums) > 0 && selectedPlaylist.SelectedAlbum >= 0 {
 				selectedPlaylist.SelectedTrack = selectedPlaylist.SelectedAlbum
 				selectedPlaylist.SelectedAlbum = -1

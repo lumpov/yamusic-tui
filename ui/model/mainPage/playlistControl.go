@@ -273,6 +273,9 @@ func (m *Model) albumListActive() bool {
 	return len(pl.Albums) > 0 && pl.SelectedAlbum < 0
 }
 
+// playSelected starts playback of the track selected in the tracklist (or
+// opens the selected album). Used both by the tracklist "play" action and by
+// the player play/pause control when nothing is playing yet.
 func (m *Model) playSelected() tea.Cmd {
 	playlistItem := m.playlists.SelectedItem()
 	if playlistItem == nil || !playlistItem.Active {

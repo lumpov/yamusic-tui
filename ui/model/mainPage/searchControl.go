@@ -127,7 +127,7 @@ func (m *Model) displaySearchResults(res api.SearchResult, searchConfig *config.
 				continue
 			}
 			wg.Add(1)
-			go m.loadSearchPlaylists(&wg, pl, &albumBlocks[i])
+			go m.loadSearchPlaylists(&wg, pl, &playlistBlocks[i])
 		}
 	}
 
@@ -151,7 +151,7 @@ func (m *Model) displaySearchResults(res api.SearchResult, searchConfig *config.
 		playlists = append(playlists, playlistBlocks[i].items...)
 	}
 
-	if !playlists[len(playlists)-1].Active {
+	if len(playlists) == 0 || !playlists[len(playlists)-1].Active {
 		return
 	}
 
@@ -241,7 +241,7 @@ func (m *Model) loadSearchAlbums(wg *sync.WaitGroup, album *api.Album, block *me
 	}
 
 	albumArtists := helpers.ArtistList(albumWithTracks.Artists)
-	albumTracks := make([]api.Track, 0, len(albumWithTracks.Volumes[0]))
+	albumTracks := make([]api.Track, 0)
 	for _, volume := range albumWithTracks.Volumes {
 		albumTracks = append(albumTracks, volume...)
 	}

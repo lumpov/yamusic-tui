@@ -55,17 +55,26 @@ func (m *Model) rotateTracks(pl *playlist.Item) {
 		return
 	}
 
+	if len(suggestedTracks.Sequence) == 0 {
+		log.Print(log.LVL_ERROR, "failed to obtain more rotor tracks: empty sequence")
+		m.tracker.ShowError("next track obtain failure")
+		return
+	}
+
 	pl.SessionBatch = suggestedTracks.BatchId
 	pl.Tracks = append(pl.Tracks, suggestedTracks.Sequence[0].Track)
-	if m.playlists.Items()[m.currentPlaylistIndex].IsSame(pl) {
+	items := m.playlists.Items()
+	if m.currentPlaylistIndex >= 0 && m.currentPlaylistIndex < len(items) && items[m.currentPlaylistIndex].IsSame(pl) {
 		m.playQueue = pl.Tracks
 	}
 
 	if m.playlists.SelectedItem().IsSame(pl) {
 		tackItems := m.tracklist.Items()
-		lastTrack := tackItems[len(tackItems)-1]
-		lastTrack.IsSuggestion = false
-		m.tracklist.SetItem(len(tackItems)-1, lastTrack)
+		if len(tackItems) > 0 {
+			lastTrack := tackItems[len(tackItems)-1]
+			lastTrack.IsSuggestion = false
+			m.tracklist.SetItem(len(tackItems)-1, lastTrack)
+		}
 		m.tracklist.InsertItem(-1, tracklist.Item{
 			Track:        &pl.Tracks[len(pl.Tracks)-1],
 			Artists:      helpers.ArtistList(suggestedTracks.Sequence[0].Track.Artists),
@@ -326,7 +335,7 @@ func (m *Model) playTrack(track *api.Track) {
 
 func (m *Model) playSelectedPlaylist(trackIndex int) {
 	selectedPlaylist := m.playlists.SelectedItem()
-	if len(selectedPlaylist.Tracks) == 0 || selectedPlaylist.SelectedTrack < 0 || selectedPlaylist.SelectedTrack >= len(selectedPlaylist.Tracks) {
+	if selectedPlaylist == nil || len(selectedPlaylist.Tracks) == 0 || selectedPlaylist.SelectedTrack < 0 || selectedPlaylist.SelectedTrack >= len(selectedPlaylist.Tracks) {
 		m.Send(tracker.STOP)
 		return
 	}

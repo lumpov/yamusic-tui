@@ -82,7 +82,8 @@ func (m *Model) View() string {
 		return ""
 	}
 
-	m.helpMap.Renamable = m.SelectedItem().Kind >= USER
+	selected := m.SelectedItem()
+	m.helpMap.Renamable = selected != nil && selected.Kind >= USER
 	if m.help.ShowAll {
 		m.list.SetHeight(m.height - 3)
 	} else {
@@ -110,7 +111,11 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 		case controls.PlaylistsUp.Contains(keypress):
 			m.list, cmd = m.list.Update(msg)
 
-			for len(m.list.Items()) > 0 && m.list.Index() > 0 && !m.list.SelectedItem().(*Item).Active {
+			for len(m.list.Items()) > 0 && m.list.Index() > 0 {
+				item, ok := m.list.SelectedItem().(*Item)
+				if !ok || item.Active {
+					break
+				}
 				m.list.CursorUp()
 			}
 
@@ -119,7 +124,11 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 		case controls.PlaylistsDown.Contains(keypress):
 			m.list, cmd = m.list.Update(msg)
 
-			for m.list.Index() < len(m.list.Items())-1 && !m.list.SelectedItem().(*Item).Active {
+			for m.list.Index() < len(m.list.Items())-1 {
+				item, ok := m.list.SelectedItem().(*Item)
+				if !ok || item.Active {
+					break
+				}
 				m.list.CursorDown()
 			}
 
@@ -185,7 +194,11 @@ func (m *Model) RemoveItem(index int) {
 }
 
 func (m *Model) SelectedItem() *Item {
-	return m.list.SelectedItem().(*Item)
+	item, ok := m.list.SelectedItem().(*Item)
+	if !ok {
+		return nil
+	}
+	return item
 }
 
 func (m *Model) Index() int {

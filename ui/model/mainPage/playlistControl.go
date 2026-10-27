@@ -24,7 +24,7 @@ func (m *Model) addPlaylistControl(msg search.Control) tea.Cmd {
 		m.isAddPlaylistActive = false
 
 		selectedPlaylist := m.playlists.SelectedItem()
-		if len(selectedPlaylist.Tracks) == 0 {
+		if selectedPlaylist == nil || len(selectedPlaylist.Tracks) == 0 {
 			return nil
 		}
 
@@ -127,6 +127,9 @@ func (m *Model) renamePlaylistControl(msg input.Control) tea.Cmd {
 	}
 
 	selectedPlaylist := m.playlists.SelectedItem()
+	if selectedPlaylist == nil {
+		return nil
+	}
 	pl, err := m.client.RenamePlaylist(selectedPlaylist.Kind, newName)
 	if err != nil {
 		log.Print(log.LVL_ERROR, "failed to rename playlist [%s] to '%s': %s", selectedPlaylist.Name, newName, err)
@@ -142,7 +145,7 @@ func (m *Model) renamePlaylistControl(msg input.Control) tea.Cmd {
 }
 
 func (m *Model) removeFromPlaylist(pl *playlist.Item, index int) tea.Cmd {
-	if index >= len(pl.Tracks) {
+	if pl == nil || index < 0 || index >= len(pl.Tracks) {
 		return nil
 	}
 
@@ -214,14 +217,20 @@ func (m *Model) removeFromPlaylist(pl *playlist.Item, index int) tea.Cmd {
 
 func (m *Model) shufflePlaylist(pl *playlist.Item) tea.Cmd {
 	var cmds []tea.Cmd
-	if pl.Kind == playlist.NONE || pl.Kind == playlist.MYWAVE || len(pl.Tracks) == 0 {
+	if pl == nil || pl.Kind == playlist.NONE || pl.Kind == playlist.MYWAVE || len(pl.Tracks) == 0 {
 		return nil
 	}
 
 	currentTrackIndex := pl.CurrentTrack
 	selectedTrackIndex := pl.SelectedTrack
-	currentTrack := pl.Tracks[currentTrackIndex]
-	selectedTrack := pl.Tracks[selectedTrackIndex]
+	var currentTrack *api.Track
+	if currentTrackIndex >= 0 && currentTrackIndex < len(pl.Tracks) {
+		currentTrack = &pl.Tracks[currentTrackIndex]
+	}
+	var selectedTrack *api.Track
+	if selectedTrackIndex >= 0 && selectedTrackIndex < len(pl.Tracks) {
+		selectedTrack = &pl.Tracks[selectedTrackIndex]
+	}
 
 	tracks := make([]api.Track, len(pl.Tracks))
 	trackList := make([]tracklist.Item, len(pl.Tracks))
@@ -230,10 +239,10 @@ func (m *Model) shufflePlaylist(pl *playlist.Item) tea.Cmd {
 	for i, v := range perm {
 		tracks[v] = pl.Tracks[i]
 		trackList[v] = tracklist.NewItem(&tracks[v])
-		if currentTrack.Id == tracks[v].Id {
+		if currentTrack != nil && currentTrack.Id == tracks[v].Id {
 			currentTrackIndex = v
 		}
-		if selectedTrackIndex >= 0 && selectedTrack.Id == tracks[v].Id {
+		if selectedTrack != nil && selectedTrack.Id == tracks[v].Id {
 			selectedTrackIndex = v
 		}
 	}
@@ -243,7 +252,9 @@ func (m *Model) shufflePlaylist(pl *playlist.Item) tea.Cmd {
 	pl.CurrentTrack = currentTrackIndex
 	cmds = append(cmds, m.playlists.SetItem(m.playlists.Index(), pl))
 	cmds = append(cmds, m.tracklist.SetItems(trackList))
-	m.tracklist.Select(selectedTrackIndex)
+	if selectedTrackIndex >= 0 {
+		m.tracklist.Select(selectedTrackIndex)
+	}
 
 	if m.currentPlaylistIndex >= 0 && pl.IsSame(m.playlists.Items()[m.currentPlaylistIndex]) {
 		m.playQueue = pl.Tracks
@@ -256,6 +267,9 @@ func (m *Model) shufflePlaylist(pl *playlist.Item) tea.Cmd {
 
 func (m *Model) albumListActive() bool {
 	pl := m.playlists.SelectedItem()
+	if pl == nil {
+		return false
+	}
 	return len(pl.Albums) > 0 && pl.SelectedAlbum < 0
 }
 
@@ -276,7 +290,7 @@ func (m *Model) playSelected() tea.Cmd {
 
 func (m *Model) openAlbum(index int) tea.Cmd {
 	pl := m.playlists.SelectedItem()
-	if index >= len(pl.Albums) {
+	if pl == nil || index < 0 || index >= len(pl.Albums) {
 		return nil
 	}
 
@@ -307,6 +321,9 @@ func (m *Model) openAlbum(index int) tea.Cmd {
 }
 
 func (m *Model) displayPlaylist(pl *playlist.Item) {
+	if pl == nil {
+		return
+	}
 	var itemlist []tracklist.Item
 	if len(pl.Albums) > 0 && pl.SelectedAlbum < 0 {
 		itemlist = make([]tracklist.Item, len(pl.Albums))

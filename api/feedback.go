@@ -46,12 +46,22 @@ func NewRadioFeedbackEvent(evType RadioEventType) *RotorFeedbackEvent {
 	}
 }
 
+func trackRef(track *Track) string {
+	if track == nil {
+		return ""
+	}
+	if len(track.Albums) == 0 {
+		return track.Id
+	}
+	return fmt.Sprintf("%s:%d", track.Id, track.Albums[0].Id)
+}
+
 func NewTrackFeedbackEvent(evType TrackEventType, track *Track, playedSeconds float64) *RotorFeedbackEvent {
 	return &RotorFeedbackEvent{
 		Timestamp:          nowTimestamp(),
 		TotalPlayedSeconds: playedSeconds,
 		TrackLengthSeconds: float64(track.DurationMs) * 1000.0,
-		TrackId:            fmt.Sprintf("%s:%d", track.Id, track.Albums[0].Id),
+		TrackId:            trackRef(track),
 		Type:               string(evType),
 	}
 }

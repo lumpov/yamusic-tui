@@ -261,7 +261,7 @@ func Token(username, password string) (token string, err error) {
 }
 
 func ShareTrackLink(track *Track) string {
-	if len(track.Albums) == 0 {
+	if track == nil || len(track.Albums) == 0 {
 		return ""
 	}
 	return fmt.Sprintf("https://music.yandex.ru/album/%d/track/%s", track.Albums[0].Id, track.Id)
@@ -457,7 +457,7 @@ func (client *YaMusicClient) RotorSessionFeedback(sessionId string, feedback *Ro
 func (client *YaMusicClient) RotorSessionTracks(sessionId string, feedbacks []*RotorFeedback, trackQueue []Track) (tracks StationTracks, err error) {
 	queue := make([]string, len(trackQueue))
 	for i := range trackQueue {
-		queue[i] = fmt.Sprintf("%s:%d", trackQueue[i].Id, trackQueue[i].Albums[0].Id)
+		queue[i] = trackRef(&trackQueue[i])
 	}
 	body := map[string]interface{}{
 		"feedbacks": feedbacks,

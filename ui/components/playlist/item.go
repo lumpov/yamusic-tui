@@ -28,6 +28,9 @@ func (i *Item) FilterValue() string {
 }
 
 func (i *Item) IsSame(other *Item) bool {
+	if i == nil || other == nil {
+		return false
+	}
 	return i.Kind == other.Kind && i.Name == other.Name
 }
 

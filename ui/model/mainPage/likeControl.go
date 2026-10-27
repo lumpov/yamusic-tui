@@ -18,21 +18,27 @@ func (m *Model) likePlayingTrack() tea.Cmd {
 }
 
 func (m *Model) likeSelectedTrack() tea.Cmd {
-	if m.currentPlaylistIndex < 0 {
-		return nil
-	}
-
 	selectedPlaylist := m.playlists.SelectedItem()
-	if len(selectedPlaylist.Tracks) == 0 {
+	if selectedPlaylist == nil || len(selectedPlaylist.Tracks) == 0 {
 		return nil
 	}
 
 	track := m.tracklist.SelectedItem().Track
+	if track == nil {
+		return nil
+	}
 	return m.likeTrack(track, selectedPlaylist)
 }
 
 func (m *Model) likeTrack(track *api.Track, pl *playlist.Item) tea.Cmd {
+	if track == nil || m.client == nil {
+		return nil
+	}
+
 	likedPlaylist, index := m.playlists.GetFirst(playlist.LIKES)
+	if likedPlaylist == nil || index < 0 {
+		return nil
+	}
 
 	var evType api.TrackEventType
 	if m.likedTracksMap[track.Id] {
@@ -58,7 +64,7 @@ func (m *Model) likeTrack(track *api.Track, pl *playlist.Item) tea.Cmd {
 	}
 
 	cmd := m.playlists.SetItem(index, likedPlaylist)
-	if m.playlists.SelectedItem().Kind == playlist.LIKES {
+	if selected := m.playlists.SelectedItem(); selected != nil && selected.Kind == playlist.LIKES {
 		m.displayPlaylist(likedPlaylist)
 	}
 

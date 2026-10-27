@@ -42,10 +42,13 @@ func (m *Model) cacheCurrentTrack() tea.Cmd {
 
 	m.cachedTracksMap[currentTrack.Id] = true
 	cachePlaylist, index := m.playlists.GetFirst(playlist.LOCAL)
+	if cachePlaylist == nil || index < 0 {
+		return nil
+	}
 	cachePlaylist.AddTrack(currentTrack)
 	cmd := m.playlists.SetItem(index, cachePlaylist)
 
-	if m.playlists.SelectedItem().Kind == playlist.LOCAL {
+	if selected := m.playlists.SelectedItem(); selected != nil && selected.Kind == playlist.LOCAL {
 		m.displayPlaylist(cachePlaylist)
 	}
 
@@ -67,12 +70,15 @@ func (m *Model) removeCache(track *api.Track) tea.Cmd {
 	}
 
 	cachePlaylist, index := m.playlists.GetFirst(playlist.LOCAL)
+	if cachePlaylist == nil || index < 0 {
+		return nil
+	}
 	cachePlaylist.RemoveTrack(track.Id)
 
 	delete(m.cachedTracksMap, track.Id)
 	cmd := m.playlists.SetItem(index, cachePlaylist)
 
-	if m.playlists.SelectedItem().Kind == playlist.LOCAL {
+	if selected := m.playlists.SelectedItem(); selected != nil && selected.Kind == playlist.LOCAL {
 		m.displayPlaylist(cachePlaylist)
 	}
 

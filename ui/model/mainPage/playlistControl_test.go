@@ -34,3 +34,44 @@ func TestDisplayPlaylistPinnedAlbumDoesNotPanic(t *testing.T) {
 
 	m.displayPlaylist(pl)
 }
+
+func TestShufflePlaylistCurrentTrackOutOfRange(t *testing.T) {
+	config.InitTest()
+	likes := make(map[string]bool)
+	cache := make(map[string]bool)
+	playlists := playlist.New(nil, "YaMusic")
+	pl := &playlist.Item{
+		Name:          "user",
+		Kind:          playlist.USER,
+		Active:        true,
+		Tracks:        []api.Track{{Id: "a"}, {Id: "b"}},
+		CurrentTrack:  -1,
+		SelectedTrack: 0,
+	}
+	_ = playlists.SetItems([]*playlist.Item{pl})
+	playlists.Select(0)
+
+	m := &Model{
+		playlists:            playlists,
+		tracklist:            tracklist.New(nil, &likes, &cache),
+		currentPlaylistIndex: -1,
+	}
+	_ = m.shufflePlaylist(pl)
+	if pl.CurrentTrack != -1 {
+		t.Fatalf("CurrentTrack=%d, want -1", pl.CurrentTrack)
+	}
+	if pl.SelectedTrack < 0 || pl.SelectedTrack >= len(pl.Tracks) || pl.Tracks[pl.SelectedTrack].Id != "a" {
+		t.Fatalf("selected track not preserved: index=%d tracks=%v", pl.SelectedTrack, pl.Tracks)
+	}
+}
+
+func TestAlbumListActiveNilSelection(t *testing.T) {
+	config.InitTest()
+	m := &Model{
+		playlists: playlist.New(nil, "YaMusic"),
+	}
+	_ = m.playlists.Reset()
+	if m.albumListActive() {
+		t.Fatal("empty playlist list must not be an album list")
+	}
+}

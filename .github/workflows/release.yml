@@ -10,6 +10,10 @@ on:
     tags:
       - "v*"
 
+env:
+  RELEASE_PRERELEASE: ${{ contains(github.ref_name, '-') }}
+  RELEASE_MAKE_LATEST: ${{ !contains(github.ref_name, '-') }}
+
 jobs:
   build:
     name: Release binaries
@@ -34,6 +38,9 @@ jobs:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ github.ref }}
         overwrite: true
+        prerelease: ${{ env.RELEASE_PRERELEASE }}
+        make_latest: ${{ env.RELEASE_MAKE_LATEST }}
+        target_commit: ${{ github.sha }}
 
     - name: Build linux-amd64
       run: go build -trimpath -ldflags="-w -s" -o yamusic
@@ -47,6 +54,9 @@ jobs:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ github.ref }}
         overwrite: true
+        prerelease: ${{ env.RELEASE_PRERELEASE }}
+        make_latest: ${{ env.RELEASE_MAKE_LATEST }}
+        target_commit: ${{ github.sha }}
 
     - name: Build linux-amd64-nomedia
       run: go build -trimpath -ldflags="-w -s" -tags=nomedia -o yamusic-nomedia
@@ -60,6 +70,9 @@ jobs:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ github.ref }}
         overwrite: true
+        prerelease: ${{ env.RELEASE_PRERELEASE }}
+        make_latest: ${{ env.RELEASE_MAKE_LATEST }}
+        target_commit: ${{ github.sha }}
 
     - name: Build windows-amd64
       run: go build -trimpath -ldflags="-w -s" -o yamusic.exe
@@ -73,6 +86,9 @@ jobs:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ github.ref }}
         overwrite: true
+        prerelease: ${{ env.RELEASE_PRERELEASE }}
+        make_latest: ${{ env.RELEASE_MAKE_LATEST }}
+        target_commit: ${{ github.sha }}
 
     - name: Build windows-amd64-nomedia
       run: go build -trimpath -ldflags="-w -s" -tags=nomedia -o yamusic-nomedia.exe
@@ -86,6 +102,9 @@ jobs:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ github.ref }}
         overwrite: true
+        prerelease: ${{ env.RELEASE_PRERELEASE }}
+        make_latest: ${{ env.RELEASE_MAKE_LATEST }}
+        target_commit: ${{ github.sha }}
 
   macos:
     name: Release darwin-${{ matrix.goarch }}
@@ -120,6 +139,9 @@ jobs:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ github.ref }}
         overwrite: true
+        prerelease: ${{ env.RELEASE_PRERELEASE }}
+        make_latest: ${{ env.RELEASE_MAKE_LATEST }}
+        target_commit: ${{ github.sha }}
 
     - name: Build darwin-${{ matrix.goarch }}-nomedia
       run: go build -trimpath -ldflags="-w -s -linkmode=external" -tags=nomedia -o yamusic-darwin-${{ matrix.goarch }}-nomedia
@@ -135,3 +157,6 @@ jobs:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ github.ref }}
         overwrite: true
+        prerelease: ${{ env.RELEASE_PRERELEASE }}
+        make_latest: ${{ env.RELEASE_MAKE_LATEST }}
+        target_commit: ${{ github.sha }}

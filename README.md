@@ -84,8 +84,8 @@ controls:
    cursor-up: up
    cursor-down: down
    show-all-keys: ?
-   playlists-up: ctrl+up
-   playlists-down: ctrl+down
+   playlists-up: +
+   playlists-down: '-'
    playlists-rename: ctrl+r
    playlists-hide: ctrl+b
    tracks-next-page: pgup
@@ -106,8 +106,8 @@ controls:
    player-rewind-backward: ctrl+left
    player-like: L
    player-cache: S
-   player-vol-up: +,=
-   player-vol-down: '-'
+   player-vol-up: ']'
+   player-vol-down: '['
    player-toggle-lyrics: t
    player-hide: ctrl+p
 style:

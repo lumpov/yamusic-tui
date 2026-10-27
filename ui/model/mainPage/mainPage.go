@@ -41,6 +41,7 @@ type Model struct {
 	isAddPlaylistActive    bool
 	isRenamePlaylistActive bool
 	isPlaylistHideOverride bool
+	uiFocused              bool
 
 	playQueue            []api.Track
 	playQueueTrackIndex  int
@@ -55,7 +56,7 @@ type Model struct {
 func New(mediaHandler handler.MediaHandler) *Model {
 	m := &Model{}
 
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithReportFocus())
 	m.program = p
 	m.clipboard = clipboard.New()
 	m.mediaHandler = mediaHandler
@@ -67,6 +68,7 @@ func New(mediaHandler handler.MediaHandler) *Model {
 	m.tracker = tracker.New(m.program, &m.likedTracksMap)
 	m.searchDialog = search.New()
 	m.inputDialog = input.New()
+	m.uiFocused = true
 
 	return m
 }
@@ -102,7 +104,21 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		cmds []tea.Cmd
 	)
 
+	if skipUIProgress(m.uiFocused, message) {
+		return m, nil
+	}
+
 	switch msg := message.(type) {
+	case tea.FocusMsg:
+		m.uiFocused = true
+		if m.tracker != nil && !m.tracker.IsStoped() {
+			m.tracker, cmd = m.tracker.Update(tracker.ProgressControl(m.tracker.Progress()))
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
+	case tea.BlurMsg:
+		m.uiFocused = false
+		return m, nil
 	case LoadingMsg:
 		m.isLoading = false
 		return m, model.Cmd(playlist.CURSOR_UP)
@@ -336,38 +352,42 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) View() string {
-	if m.isLoading {
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.spinner.View())
+	var view string
+	switch {
+	case m.isLoading:
+		view = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.spinner.View())
+	case m.isSearchActive || m.isAddPlaylistActive:
+		view = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.searchDialog.View())
+	case m.isRenamePlaylistActive:
+		view = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.inputDialog.View())
+	default:
+		playlistView := m.playlists.View()
+		playlistWidth := lipgloss.Width(playlistView)
+
+		m.tracker.SetWidth(m.width - playlistWidth - 2)
+		m.tracklist.SetWidth(m.width - playlistWidth - 2)
+
+		trackerView := m.tracker.View()
+		trackerHeight := lipgloss.Height(trackerView)
+		m.tracklist.SetHeight(m.height - trackerHeight - 2)
+
+		tracklistView := m.tracklist.View()
+
+		var midPanel string
+		if m.tracklist.Hidden {
+			midPanel = trackerView
+		} else if m.tracker.Hidden {
+			midPanel = tracklistView
+		} else {
+			midPanel = lipgloss.JoinVertical(lipgloss.Left, tracklistView, trackerView)
+		}
+		view = lipgloss.JoinHorizontal(lipgloss.Bottom, playlistView, midPanel)
 	}
 
-	if m.isSearchActive || m.isAddPlaylistActive {
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.searchDialog.View())
-	} else if m.isRenamePlaylistActive {
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.inputDialog.View())
+	if !m.uiFocused {
+		return style.Dimmed(view)
 	}
-
-	playlistView := m.playlists.View()
-	playlistWidth := lipgloss.Width(playlistView)
-
-	m.tracker.SetWidth(m.width - playlistWidth - 2)
-	m.tracklist.SetWidth(m.width - playlistWidth - 2)
-
-	trackerView := m.tracker.View()
-	trackerHeight := lipgloss.Height(trackerView)
-	m.tracklist.SetHeight(m.height - trackerHeight - 2)
-
-	tracklistView := m.tracklist.View()
-
-	var midPanel string
-	if m.tracklist.Hidden {
-		midPanel = trackerView
-	} else if m.tracker.Hidden {
-		midPanel = tracklistView
-	} else {
-		midPanel = lipgloss.JoinVertical(lipgloss.Left, tracklistView, trackerView)
-	}
-
-	return lipgloss.JoinHorizontal(lipgloss.Bottom, playlistView, midPanel)
+	return view
 }
 
 //

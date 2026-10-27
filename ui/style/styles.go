@@ -2,6 +2,7 @@ package style
 
 import (
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/dece2183/yamusic-tui/config"
 )
 
@@ -200,4 +201,8 @@ func Apply(style *config.Style) {
 		Padding(0, 1).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(AccentColor)
+}
+
+func Dimmed(view string) string {
+	return lipgloss.NewStyle().Foreground(InactiveTextColor).Render(ansi.Strip(view))
 }

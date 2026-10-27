@@ -20,8 +20,6 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dece2183/go-clipboard v1.0.0 h1:EL7UDpJyIYa8AIznhY8lR6tE1H6vYIlTSDt+17dNprM=
 github.com/dece2183/go-clipboard v1.0.0/go.mod h1:nJZS6An1kHc8CxKAgUX3IF1wtDcbpunPkYFn4U3qhtE=
-github.com/dece2183/go-stream-mp3 v1.0.1 h1:5DIR5xGpqa4d6u2lVjbY0YXiDwU3g4k80Wz1rJjCc5k=
-github.com/dece2183/go-stream-mp3 v1.0.1/go.mod h1:hDd2a9oSj7kjEpBtln+NBgxfJEMPUBguc8RH5L/trPk=
 github.com/dece2183/go-stream-mp3 v1.0.2 h1:HDKxNaO3yMzd6vs2XOC7diSP3Lpsi+2hI91x3CIdtM8=
 github.com/dece2183/go-stream-mp3 v1.0.2/go.mod h1:hDd2a9oSj7kjEpBtln+NBgxfJEMPUBguc8RH5L/trPk=
 github.com/dece2183/media-winrt-go v0.0.0-20250304161442-46653f733234 h1:vlh5w+jijiQHy+/Sg+GVtZixqOsXTwqfE5i07vEIGGU=

@@ -3,7 +3,6 @@ package tracker
 import (
 	"fmt"
 	"io"
-	"math"
 	"strings"
 	"time"
 
@@ -19,7 +18,6 @@ import (
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/ebitengine/oto/v3"
 )
 
 type Control uint
@@ -71,8 +69,8 @@ type Model struct {
 	volumeIncremet float64
 	lastVolumeKey  time.Time
 	rewindAmount   time.Duration
-	playerContext  *oto.Context
-	player         *oto.Player
+	audio          audioBackend
+	player         audioPlayer
 	trackWrapper   *readWrapper
 
 	program  *tea.Program
@@ -107,22 +105,7 @@ func New(p *tea.Program, likesMap *map[string]bool) *Model {
 
 	m.help.Ellipsis = "…"
 	m.trackWrapper = &readWrapper{program: m.program}
-
-	op := &oto.NewContextOptions{
-		SampleRate:   44100,
-		ChannelCount: 2,
-		BufferSize:   time.Millisecond * time.Duration(config.Current.BufferSize),
-		Format:       oto.FormatSignedInt16LE,
-	}
-
-	var err error
-	var readyChan chan struct{}
-	m.playerContext, readyChan, err = oto.NewContext(op)
-	if err != nil {
-		log.Print(log.LVL_PANIC, "failed to create player context: %s", err)
-		model.PrettyExit(err, 12)
-	}
-	<-readyChan
+	m.audio = newAudioBackend()
 
 	go m.volumeFader()
 	return m
@@ -386,7 +369,7 @@ func (m *Model) StartTrack(track *api.Track, reader *stream.BufferedStream, lyri
 
 	m.track = *track
 	m.trackWrapper.NewReader(reader)
-	m.player = m.playerContext.NewPlayer(m.trackWrapper)
+	m.player = m.audio.Open(m.trackWrapper)
 	m.player.SetVolume(0)
 	m.player.Play()
 	m.lyrics = lyrics
@@ -464,11 +447,9 @@ func (m *Model) Rewind(amount time.Duration) tea.Cmd {
 
 	amountMs := float64(amount.Milliseconds())
 	currentPos := int64(float64(m.trackWrapper.Length()) * m.trackWrapper.Progress())
-	byteOffset := int64(math.Round((float64(m.trackWrapper.Length()) / float64(m.track.DurationMs)) * amountMs))
-
-	// align position by 4 bytes
-	currentPos += byteOffset
+	currentPos += compressedByteOffset(m.trackWrapper.Length(), float64(m.track.DurationMs), amountMs)
 	currentPos += currentPos % 4
+	currentPos = clampByteOffset(currentPos, m.trackWrapper.Length())
 
 	if currentPos <= 0 {
 		m.player.Seek(0, io.SeekStart)
@@ -487,11 +468,10 @@ func (m *Model) SetPos(pos time.Duration) {
 		return
 	}
 
-	posMs := pos.Milliseconds()
-	byteOffset := int64(math.Round((float64(m.trackWrapper.Length()) / float64(m.track.DurationMs)) * float64(posMs)))
-
-	// align position by 4 bytes
-	byteOffset += byteOffset % 4
+	byteOffset := clampByteOffset(
+		compressedByteOffset(m.trackWrapper.Length(), float64(m.track.DurationMs), float64(pos.Milliseconds())),
+		m.trackWrapper.Length(),
+	)
 	m.player.Seek(byteOffset, io.SeekStart)
 }
 

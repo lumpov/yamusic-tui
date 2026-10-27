@@ -34,7 +34,7 @@ func (d ItemDelegate) Update(message tea.Msg, m *list.Model) tea.Cmd {
 		return nil
 	}
 
-	if (key.Matches(msg, m.KeyMap.CursorUp) || key.Matches(msg, m.KeyMap.CursorDown)) && item.Active {
+	if d.programm != nil && (key.Matches(msg, m.KeyMap.CursorUp) || key.Matches(msg, m.KeyMap.CursorDown)) && item.Active {
 		go d.programm.Send(item)
 	}
 

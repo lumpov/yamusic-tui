@@ -14,6 +14,7 @@ type Model struct {
 	err           error
 	program       *tea.Program
 	width, height int
+	uiFocused     bool
 
 	input   textinput.Model
 	help    help.Model
@@ -31,8 +32,9 @@ func New() *Model {
 	m.input.Width = 64
 	m.input.CharLimit = 64
 	m.input.Focus()
+	m.uiFocused = true
 
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithReportFocus())
 	m.program = p
 
 	return m
@@ -72,6 +74,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	)
 
 	switch msg := msg.(type) {
+	case tea.FocusMsg:
+		m.uiFocused = true
+		return m, nil
+	case tea.BlurMsg:
+		m.uiFocused = false
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)
 		return m, tea.ClearScreen
@@ -112,6 +120,9 @@ func (m *Model) View() string {
 		content,
 	)
 
+	if !m.uiFocused {
+		return style.Dimmed(dialog)
+	}
 	return dialog
 }
 

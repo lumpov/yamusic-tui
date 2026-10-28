@@ -7,6 +7,8 @@
 An unofficial Yandex Music terminal client.<br>
 Based on [yandex-music-open-api](https://github.com/acherkashin/yandex-music-open-api).
 
+Yandex Music is a trademark of Yandex LLC. This project is not affiliated with, endorsed by, or supported by Yandex. The name is used only to identify the service.
+
 ![screenshot](.assets/screenshot.png)
 
 ### Requirements
@@ -170,5 +172,5 @@ On macOS, media key support uses `MPRemoteCommandCenter` and `MPNowPlayingInfoCe
 Due to a Go linker limitation, the binary must be built with an external linker to include the required `LC_UUID` load command (enforced by dyld on macOS 15+):
 
 ```bash
-go build -ldflags="-linkmode=external" -o yamusic-tui .
+go build -ldflags="-linkmode=external -X github.com/dece2183/yamusic-tui/config.Version=dev" -o yamusic-tui .
 ```

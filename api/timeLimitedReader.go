@@ -3,10 +3,12 @@ package api
 import (
 	"context"
 	"io"
+	"sync"
 	"time"
 )
 
 type TimeLimitedReader struct {
+	mu      sync.Mutex
 	timer   *time.Timer
 	timeout time.Duration
 	cancel  context.CancelFunc
@@ -15,37 +17,32 @@ type TimeLimitedReader struct {
 }
 
 func NewTimeLimitedReader(r io.ReadCloser, ctx context.Context, ctxCancel context.CancelFunc, timeout time.Duration) *TimeLimitedReader {
-	tr := &TimeLimitedReader{
-		timer:   time.NewTimer(timeout),
+	return &TimeLimitedReader{
 		timeout: timeout,
 		cancel:  ctxCancel,
 		ctx:     ctx,
 		body:    r,
 	}
-
-	go tr.deadline()
-	return tr
 }
 
 func (r *TimeLimitedReader) Read(dest []byte) (int, error) {
-	r.timer.Reset(r.timeout)
+	r.mu.Lock()
+	if r.timer == nil {
+		r.timer = time.AfterFunc(r.timeout, r.cancel)
+	} else {
+		r.timer.Stop()
+		r.timer.Reset(r.timeout)
+	}
+	r.mu.Unlock()
 	return r.body.Read(dest)
 }
 
 func (r *TimeLimitedReader) Close() error {
-	r.cancel()
-	r.timer.Stop()
-	return r.body.Close()
-}
-
-func (r *TimeLimitedReader) deadline() {
-	for {
-		select {
-		case <-r.timer.C:
-			r.cancel()
-			return
-		case <-r.ctx.Done():
-			return
-		}
+	r.mu.Lock()
+	if r.timer != nil {
+		r.timer.Stop()
 	}
+	r.mu.Unlock()
+	r.cancel()
+	return r.body.Close()
 }

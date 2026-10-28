@@ -54,6 +54,23 @@ var httpClient = http.Client{Transport: &http.Transport{
 	ResponseHeaderTimeout: _RESPONSE_TIMEOUT,
 }}
 
+type httpStatusError struct {
+	Code   int
+	Status string
+}
+
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("unhandled status %s", e.Status)
+}
+
+func statusCode(err error) int {
+	var se *httpStatusError
+	if errors.As(err, &se) {
+		return se.Code
+	}
+	return 0
+}
+
 func nowTimestamp() string {
 	return time.Now().Format(_TIMESTAMP_FORMAT)
 }
@@ -76,7 +93,9 @@ func proccessRequest[RetT any](req *http.Request) (result RetT, invInfo InvocInf
 		}
 
 		dec := json.NewDecoder(resp.Body)
-		dec.Decode(&respBody)
+		if err = dec.Decode(&respBody); err != nil {
+			return
+		}
 
 		invInfo = respBody.InvocationInfo
 		result = respBody.Result
@@ -87,18 +106,22 @@ func proccessRequest[RetT any](req *http.Request) (result RetT, invInfo InvocInf
 		}
 
 		dec := json.NewDecoder(resp.Body)
-		dec.Decode(&respBody)
+		if err = dec.Decode(&respBody); err != nil {
+			return
+		}
 
 		invInfo = respBody.InvocationInfo
 		err = respBody.Error
 	case http.StatusUnauthorized:
 		var respBody UnauthorizedError
 		dec := json.NewDecoder(resp.Body)
-		dec.Decode(&respBody)
+		if err = dec.Decode(&respBody); err != nil {
+			return
+		}
 		err = respBody
 		invInfo.ReqId = respBody.RequestId
 	default:
-		err = fmt.Errorf("unhandled status %s", resp.Status)
+		err = &httpStatusError{Code: resp.StatusCode, Status: resp.Status}
 	}
 
 	return
@@ -243,7 +266,9 @@ func Token(username, password string) (token string, err error) {
 
 	respBody := map[string]string{}
 	dec := json.NewDecoder(resp.Body)
-	dec.Decode(&respBody)
+	if err = dec.Decode(&respBody); err != nil {
+		return
+	}
 
 	errDesc, ok := respBody["error_description"]
 	if ok {
@@ -280,12 +305,15 @@ func DownloadTrackCover(dst io.Writer, track *Track, size int) (string, error) {
 		return "", errors.New("cover not presented")
 	}
 
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return "", err
 	}
 
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("cover download status %s", resp.Status)
+	}
 	_, err = io.Copy(dst, resp.Body)
 	return resp.Header.Get("Content-Type"), err
 }
@@ -471,15 +499,26 @@ func (client *YaMusicClient) RotorSessionTracks(sessionId string, feedbacks []*R
 	return
 }
 
+func durationMsToSeconds(ms int) int {
+	if ms < 0 {
+		return 0
+	}
+	return ms / 1000
+}
+
 func (client *YaMusicClient) PlayTrack(track *Track, fromCache bool) (err error) {
+	if track == nil {
+		return errors.New("track is nil")
+	}
+	seconds := durationMsToSeconds(track.DurationMs)
 	queryParams := url.Values{
 		"uid":                  {fmt.Sprint(client.userid)},
 		"from":                 {client.name},
 		"play-id":              {client.sessionid},
 		"track-id":             {track.Id},
 		"from-cache":           {fmt.Sprint(fromCache)},
-		"track-length-seconds": {fmt.Sprint(track.DurationMs + 1000)},
-		"total-played-seconds": {fmt.Sprint(track.DurationMs + 1000)},
+		"track-length-seconds": {strconv.Itoa(seconds)},
+		"total-played-seconds": {strconv.Itoa(seconds)},
 		"timestamp":            {nowTimestamp()},
 	}
 	_, _, err = postRequest[interface{}](client.token, "/play-audio", queryParams)
@@ -610,21 +649,42 @@ func (client *YaMusicClient) SearchSuggest(part string) (suggestions SearchSugge
 	return
 }
 
-func (client *YaMusicClient) TrackLyricsRequest(trackId string) (LRCLyrics []LyricPair, err error) {
+func (client *YaMusicClient) trackLyricsMeta(trackId, format string) (TrackLyrics, error) {
 	timestamp := fmt.Sprintf("%d", time.Now().Unix())
 	// scary algorithm to sign the request (required for lyrics)
 	message := trackId + timestamp
 	h := hmac.New(sha256.New, []byte("p93jhgh689SBReK6ghtw62"))
 	h.Write([]byte(message))
-	hmacSign := h.Sum(nil)
-	sign := base64.StdEncoding.EncodeToString(hmacSign)
-	lyrics, _, err := getRequest[TrackLyrics](client.token, fmt.Sprintf("/tracks/%s/lyrics", trackId), url.Values{"sign": {sign}, "timeStamp": {timestamp}, "format": {"LRC"}})
+	sign := base64.StdEncoding.EncodeToString(h.Sum(nil))
+	lyrics, _, err := getRequest[TrackLyrics](client.token, fmt.Sprintf("/tracks/%s/lyrics", trackId), url.Values{
+		"sign":      {sign},
+		"timeStamp": {timestamp},
+		"format":    {format},
+	})
+	return lyrics, err
+}
+
+func (client *YaMusicClient) TrackLyricsRequest(trackId string) (LRCLyrics []LyricPair, err error) {
+	lyrics, err := client.trackLyricsMeta(trackId, "LRC")
+	if err != nil {
+		if statusCode(err) != http.StatusNotFound {
+			return []LyricPair{}, err
+		}
+		lyrics, err = client.trackLyricsMeta(trackId, "TEXT")
+		if err != nil {
+			return []LyricPair{}, err
+		}
+	}
+	if lyrics.DownloadUrl == "" {
+		return []LyricPair{}, errors.New("lyrics download url is empty")
+	}
+	LRCLyricsResponse, err := httpClient.Get(lyrics.DownloadUrl)
 	if err != nil {
 		return []LyricPair{}, err
 	}
-	LRCLyricsResponse, err := http.Get(lyrics.DownloadUrl)
-	if err != nil {
-		return []LyricPair{}, err
+	defer LRCLyricsResponse.Body.Close()
+	if LRCLyricsResponse.StatusCode != http.StatusOK {
+		return []LyricPair{}, fmt.Errorf("lyrics download status %s", LRCLyricsResponse.Status)
 	}
 	data, err := io.ReadAll(LRCLyricsResponse.Body)
 	if err != nil {
@@ -664,6 +724,16 @@ func parseLRCText(lrcContent string) []LyricPair {
 
 		totalMs := minutes*60*1000 + seconds*1000 + millis
 		lyrics = append(lyrics, LyricPair{totalMs, strings.TrimSpace(parts[1])})
+	}
+
+	if len(lyrics) == 0 {
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "[") {
+				continue
+			}
+			lyrics = append(lyrics, LyricPair{0, line})
+		}
 	}
 
 	return lyrics

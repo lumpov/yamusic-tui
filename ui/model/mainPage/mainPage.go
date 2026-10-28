@@ -63,7 +63,7 @@ func New(mediaHandler handler.MediaHandler) *Model {
 	m.likedTracksMap = make(map[string]bool)
 	m.cachedTracksMap = make(map[string]bool)
 	m.spinner = spinner.New(spinner.WithSpinner(spinner.Points))
-	m.playlists = playlist.New(m.program, "YaMusic")
+	m.playlists = playlist.New(m.program)
 	m.tracklist = tracklist.New(m.program, &m.likedTracksMap, &m.cachedTracksMap)
 	m.tracker = tracker.New(m.program, &m.likedTracksMap)
 	m.searchDialog = search.New()

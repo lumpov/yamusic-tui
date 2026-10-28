@@ -39,7 +39,7 @@ func TestShufflePlaylistCurrentTrackOutOfRange(t *testing.T) {
 	config.InitTest()
 	likes := make(map[string]bool)
 	cache := make(map[string]bool)
-	playlists := playlist.New(nil, "YaMusic")
+	playlists := playlist.New(nil)
 	pl := &playlist.Item{
 		Name:          "user",
 		Kind:          playlist.USER,
@@ -68,7 +68,7 @@ func TestShufflePlaylistCurrentTrackOutOfRange(t *testing.T) {
 func TestAlbumListActiveNilSelection(t *testing.T) {
 	config.InitTest()
 	m := &Model{
-		playlists: playlist.New(nil, "YaMusic"),
+		playlists: playlist.New(nil),
 	}
 	_ = m.playlists.Reset()
 	if m.albumListActive() {

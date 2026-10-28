@@ -554,8 +554,9 @@ func (m *Model) renderLyrics() string {
 	previousLine := " "
 
 	if m.player != nil && m.showLyrics {
-		switch m.track.LyricsInfo.HasAvailableSyncLyrics {
-		case true:
+		if len(m.lyrics) == 0 {
+			currentLine = "No lyrics for this track"
+		} else if m.lyricsHaveTimestamps() {
 			for idx, line := range m.lyrics {
 				if line.Timestamp > int(m.Position().Milliseconds()-1000) {
 					previousLine = m.tryGetLyricsLine(idx - 2)
@@ -564,8 +565,10 @@ func (m *Model) renderLyrics() string {
 					break
 				}
 			}
-		case false:
-			currentLine = "This song doesn't have synced lyrics!"
+		} else {
+			previousLine = m.tryGetLyricsLine(0)
+			currentLine = m.tryGetLyricsLine(1)
+			nextLine = m.tryGetLyricsLine(2)
 		}
 	}
 
@@ -577,6 +580,15 @@ func (m *Model) renderLyrics() string {
 	lyrics = lipgloss.NewStyle().Width(m.width - 4).AlignHorizontal(lipgloss.Center).Render(lyrics)
 
 	return lyrics
+}
+
+func (m *Model) lyricsHaveTimestamps() bool {
+	for _, line := range m.lyrics {
+		if line.Timestamp > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Model) tryGetLyricsLine(idx int) (line string) {

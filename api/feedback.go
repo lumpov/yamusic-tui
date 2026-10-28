@@ -57,10 +57,17 @@ func trackRef(track *Track) string {
 }
 
 func NewTrackFeedbackEvent(evType TrackEventType, track *Track, playedSeconds float64) *RotorFeedbackEvent {
+	if track == nil {
+		return &RotorFeedbackEvent{
+			Timestamp:          nowTimestamp(),
+			TotalPlayedSeconds: playedSeconds,
+			Type:               string(evType),
+		}
+	}
 	return &RotorFeedbackEvent{
 		Timestamp:          nowTimestamp(),
 		TotalPlayedSeconds: playedSeconds,
-		TrackLengthSeconds: float64(track.DurationMs) * 1000.0,
+		TrackLengthSeconds: float64(track.DurationMs) / 1000.0,
 		TrackId:            trackRef(track),
 		Type:               string(evType),
 	}

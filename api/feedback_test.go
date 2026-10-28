@@ -19,4 +19,23 @@ func TestNewTrackFeedbackEventWithoutAlbum(t *testing.T) {
 	if ev.TrackId != "t1" {
 		t.Fatalf("TrackId=%q, want t1", ev.TrackId)
 	}
+	if ev.TrackLengthSeconds != 180 {
+		t.Fatalf("TrackLengthSeconds=%v, want 180", ev.TrackLengthSeconds)
+	}
+}
+
+func TestNewTrackFeedbackEventNilTrack(t *testing.T) {
+	ev := NewTrackFeedbackEvent(EV_TRACK_STARTED, nil, 1.5)
+	if ev == nil {
+		t.Fatal("expected event")
+	}
+	if ev.TrackId != "" {
+		t.Fatalf("TrackId=%q, want empty", ev.TrackId)
+	}
+	if ev.TrackLengthSeconds != 0 {
+		t.Fatalf("TrackLengthSeconds=%v, want 0", ev.TrackLengthSeconds)
+	}
+	if ev.TotalPlayedSeconds != 1.5 {
+		t.Fatalf("TotalPlayedSeconds=%v, want 1.5", ev.TotalPlayedSeconds)
+	}
 }

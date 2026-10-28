@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -95,34 +96,29 @@ type Tag struct {
 	Value string `json:"value"`
 }
 
-type Label struct {
-	Id   string `json:"id"`
-	Name string `json:"name"`
-}
+type FlexibleString string
 
-func (l *Label) UnmarshalJSON(data []byte) error {
-	var raw struct {
-		Id   json.RawMessage `json:"id"`
-		Name string          `json:"name"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	l.Name = raw.Name
-	if len(raw.Id) == 0 || string(raw.Id) == "null" {
+func (s *FlexibleString) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		*s = ""
 		return nil
 	}
 	var asString string
-	if err := json.Unmarshal(raw.Id, &asString); err == nil {
-		l.Id = asString
+	if err := json.Unmarshal(data, &asString); err == nil {
+		*s = FlexibleString(asString)
 		return nil
 	}
 	var asNumber json.Number
-	if err := json.Unmarshal(raw.Id, &asNumber); err == nil {
-		l.Id = asNumber.String()
+	if err := json.Unmarshal(data, &asNumber); err == nil {
+		*s = FlexibleString(asNumber.String())
 		return nil
 	}
-	return json.Unmarshal(raw.Id, &l.Id)
+	return fmt.Errorf("expected string or number, got %s", data)
+}
+
+type Label struct {
+	Id   FlexibleString `json:"id"`
+	Name string         `json:"name"`
 }
 
 type Artist struct {
@@ -442,9 +438,9 @@ type SearchSuggest struct {
 }
 
 type TrackLyrics struct {
-	DownloadUrl     string   `json:"downloadUrl"`
-	LyricId         string   `json:"lyricId"`
-	ExternalLyricId string   `json:"externalLyricId"`
+	DownloadUrl     string         `json:"downloadUrl"`
+	LyricId         FlexibleString `json:"lyricId"`
+	ExternalLyricId FlexibleString `json:"externalLyricId"`
 	Writers         []string `json:"writers"`
 	Major           struct {
 		Id         int    `json:"id"`

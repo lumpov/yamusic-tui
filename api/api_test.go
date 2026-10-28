@@ -70,6 +70,23 @@ func TestProccessRequestDecodesOKResult(t *testing.T) {
 	}
 }
 
+func TestProccessRequestNotFoundStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		io.WriteString(w, "missing")
+	}))
+	defer srv.Close()
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = proccessRequest[Track](req)
+	if statusCode(err) != http.StatusNotFound {
+		t.Fatalf("statusCode=%d err=%v, want 404", statusCode(err), err)
+	}
+}
+
 func TestPlayTrackNilTrack(t *testing.T) {
 	client := &YaMusicClient{}
 	if err := client.PlayTrack(nil, false); err == nil {

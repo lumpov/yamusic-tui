@@ -54,6 +54,23 @@ var httpClient = http.Client{Transport: &http.Transport{
 	ResponseHeaderTimeout: _RESPONSE_TIMEOUT,
 }}
 
+type httpStatusError struct {
+	Code   int
+	Status string
+}
+
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("unhandled status %s", e.Status)
+}
+
+func statusCode(err error) int {
+	var se *httpStatusError
+	if errors.As(err, &se) {
+		return se.Code
+	}
+	return 0
+}
+
 func nowTimestamp() string {
 	return time.Now().Format(_TIMESTAMP_FORMAT)
 }
@@ -104,7 +121,7 @@ func proccessRequest[RetT any](req *http.Request) (result RetT, invInfo InvocInf
 		err = respBody
 		invInfo.ReqId = respBody.RequestId
 	default:
-		err = fmt.Errorf("unhandled status %s", resp.Status)
+		err = &httpStatusError{Code: resp.StatusCode, Status: resp.Status}
 	}
 
 	return
@@ -632,17 +649,31 @@ func (client *YaMusicClient) SearchSuggest(part string) (suggestions SearchSugge
 	return
 }
 
-func (client *YaMusicClient) TrackLyricsRequest(trackId string) (LRCLyrics []LyricPair, err error) {
+func (client *YaMusicClient) trackLyricsMeta(trackId, format string) (TrackLyrics, error) {
 	timestamp := fmt.Sprintf("%d", time.Now().Unix())
 	// scary algorithm to sign the request (required for lyrics)
 	message := trackId + timestamp
 	h := hmac.New(sha256.New, []byte("p93jhgh689SBReK6ghtw62"))
 	h.Write([]byte(message))
-	hmacSign := h.Sum(nil)
-	sign := base64.StdEncoding.EncodeToString(hmacSign)
-	lyrics, _, err := getRequest[TrackLyrics](client.token, fmt.Sprintf("/tracks/%s/lyrics", trackId), url.Values{"sign": {sign}, "timeStamp": {timestamp}, "format": {"LRC"}})
+	sign := base64.StdEncoding.EncodeToString(h.Sum(nil))
+	lyrics, _, err := getRequest[TrackLyrics](client.token, fmt.Sprintf("/tracks/%s/lyrics", trackId), url.Values{
+		"sign":      {sign},
+		"timeStamp": {timestamp},
+		"format":    {format},
+	})
+	return lyrics, err
+}
+
+func (client *YaMusicClient) TrackLyricsRequest(trackId string) (LRCLyrics []LyricPair, err error) {
+	lyrics, err := client.trackLyricsMeta(trackId, "LRC")
 	if err != nil {
-		return []LyricPair{}, err
+		if statusCode(err) != http.StatusNotFound {
+			return []LyricPair{}, err
+		}
+		lyrics, err = client.trackLyricsMeta(trackId, "TEXT")
+		if err != nil {
+			return []LyricPair{}, err
+		}
 	}
 	if lyrics.DownloadUrl == "" {
 		return []LyricPair{}, errors.New("lyrics download url is empty")

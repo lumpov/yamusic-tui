@@ -441,12 +441,25 @@ type TrackLyrics struct {
 	DownloadUrl     string         `json:"downloadUrl"`
 	LyricId         FlexibleString `json:"lyricId"`
 	ExternalLyricId FlexibleString `json:"externalLyricId"`
-	Writers         []string `json:"writers"`
+	Writers         []string       `json:"writers"`
 	Major           struct {
 		Id         int    `json:"id"`
 		Name       string `json:"name"`
 		PrettyName string `json:"prettyName"`
 	} `json:"major"`
+}
+
+type TrackSupplement struct {
+	Lyrics *SupplementLyrics `json:"lyrics"`
+}
+
+type SupplementLyrics struct {
+	Id              int    `json:"id"`
+	Lyrics          string `json:"lyrics"`
+	FullLyrics      string `json:"fullLyrics"`
+	HasRights       bool   `json:"hasRights"`
+	ShowTranslation bool   `json:"showTranslation"`
+	TextLanguage    string `json:"textLanguage"`
 }
 
 type LyricPair struct {

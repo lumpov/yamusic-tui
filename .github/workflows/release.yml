@@ -21,18 +21,27 @@ env:
 jobs:
   build:
     name: Release binaries
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Install build dependencies
       run: sudo apt install -y libx11-dev libasound2-dev
     - name: Setup Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
 
     - name: Download dependencies
-      run: go mod vendor
+      run: |
+        for i in 1 2 3; do
+          if go mod vendor; then
+            exit 0
+          fi
+          sleep 8
+        done
+        exit 1
     - name: Pack vendor dir
       run: tar -czf yamusic-tui-vendor.tar.gz ./vendor
     - name: Upload vendor archive
@@ -125,9 +134,9 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Setup Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: go.mod
 

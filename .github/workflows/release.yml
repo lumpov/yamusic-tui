@@ -10,6 +10,10 @@ on:
     tags:
       - "v*"
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   RELEASE_PRERELEASE: ${{ contains(github.ref_name, '-') }}
   RELEASE_MAKE_LATEST: ${{ !contains(github.ref_name, '-') }}
@@ -109,10 +113,12 @@ jobs:
   macos:
     name: Release darwin-${{ matrix.goarch }}
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - runner: macos-latest
+          - runner: macos-15
             goarch: arm64
           - runner: macos-15-intel
             goarch: amd64

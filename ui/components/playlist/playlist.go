@@ -52,7 +52,7 @@ type Model struct {
 	width, height int
 }
 
-func New(p *tea.Program, title string) *Model {
+func New(p *tea.Program) *Model {
 	m := &Model{
 		program: p,
 		help:    help.New(),
@@ -61,9 +61,8 @@ func New(p *tea.Program, title string) *Model {
 
 	controls := config.Current.Controls
 	m.list = list.New([]list.Item{}, ItemDelegate{programm: p}, 512, 512)
-	m.list.Title = title
+	m.list.SetShowTitle(false)
 	m.list.SetShowStatusBar(false)
-	m.list.Styles.Title = m.list.Styles.Title.Foreground(style.AccentColor).UnsetBackground().Padding(0)
 	m.list.KeyMap = list.KeyMap{
 		CursorUp:   key.NewBinding(controls.PlaylistsUp.Binding(), controls.PlaylistsUp.Help("up")),
 		CursorDown: key.NewBinding(controls.PlaylistsDown.Binding(), controls.PlaylistsDown.Help("down")),
@@ -71,6 +70,13 @@ func New(p *tea.Program, title string) *Model {
 	m.list.SetShowHelp(false)
 
 	return m
+}
+
+func headerView(width int) string {
+	title := lipgloss.NewStyle().Foreground(style.AccentColor).MaxWidth(width).Render(config.AppTitle)
+	version := style.TrackVersionStyle.MaxWidth(width).Render(config.Version)
+	note := lipgloss.NewStyle().Foreground(style.InactiveTextColor).MaxWidth(width).Render(config.AppUnofficialNote)
+	return lipgloss.JoinVertical(lipgloss.Left, title, version, note)
 }
 
 func (m *Model) Init() tea.Cmd {
@@ -84,14 +90,16 @@ func (m *Model) View() string {
 
 	selected := m.SelectedItem()
 	m.helpMap.Renamable = selected != nil && selected.Kind >= USER
+	header := headerView(m.width - 2)
+	headerHeight := lipgloss.Height(header)
 	if m.help.ShowAll {
-		m.list.SetHeight(m.height - 3)
+		m.list.SetHeight(m.height - headerHeight - 3)
 	} else {
-		m.list.SetHeight(m.height - 2)
+		m.list.SetHeight(m.height - headerHeight - 2)
 	}
 
 	hp := lipgloss.NewStyle().PaddingLeft(2).MaxWidth(m.width - 2).Render(m.help.View(m.helpMap))
-	return style.SideBoxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, m.list.View(), "", hp))
+	return style.SideBoxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, m.list.View(), "", hp))
 }
 
 func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {

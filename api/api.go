@@ -695,5 +695,15 @@ func parseLRCText(lrcContent string) []LyricPair {
 		lyrics = append(lyrics, LyricPair{totalMs, strings.TrimSpace(parts[1])})
 	}
 
+	if len(lyrics) == 0 {
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "[") {
+				continue
+			}
+			lyrics = append(lyrics, LyricPair{0, line})
+		}
+	}
+
 	return lyrics
 }

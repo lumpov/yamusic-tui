@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -97,6 +98,31 @@ type Tag struct {
 type Label struct {
 	Id   string `json:"id"`
 	Name string `json:"name"`
+}
+
+func (l *Label) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Id   json.RawMessage `json:"id"`
+		Name string          `json:"name"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	l.Name = raw.Name
+	if len(raw.Id) == 0 || string(raw.Id) == "null" {
+		return nil
+	}
+	var asString string
+	if err := json.Unmarshal(raw.Id, &asString); err == nil {
+		l.Id = asString
+		return nil
+	}
+	var asNumber json.Number
+	if err := json.Unmarshal(raw.Id, &asNumber); err == nil {
+		l.Id = asNumber.String()
+		return nil
+	}
+	return json.Unmarshal(raw.Id, &l.Id)
 }
 
 type Artist struct {

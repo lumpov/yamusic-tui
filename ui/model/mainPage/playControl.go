@@ -213,14 +213,13 @@ func (m *Model) playTrack(track *api.Track) {
 		}
 	}()
 
-	if track.LyricsInfo.HasAvailableSyncLyrics {
+	if m.client != nil && track.Id != "" {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			lyr, lerr := m.client.TrackLyricsRequest(track.Id)
 			if lerr != nil {
 				log.Print(log.LVL_WARNIGN, "failed to obtain track [%s] lyrics: %s", track.Id, lerr)
-				m.tracker.ShowError("track lyrics")
 				return
 			}
 			lyrics = lyr

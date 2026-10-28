@@ -51,9 +51,9 @@ func TestInitialLoadInvalidYAMLDoesNotOverwrite(t *testing.T) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	broken := []byte("token: [\nnot yaml")
+	broken := []byte("token: abc\nэто не yaml\n")
 	path := configPath(home)
-	if err := os.WriteFile(path, broken, 0600); err != nil {
+	if err := os.WriteFile(path, broken, 0755); err != nil {
 		t.Fatal(err)
 	}
 	err := InitialLoad()
@@ -66,6 +66,16 @@ func TestInitialLoadInvalidYAMLDoesNotOverwrite(t *testing.T) {
 	}
 	if string(got) != string(broken) {
 		t.Fatalf("file overwritten: %q", got)
+	}
+	if Current.Token != "abc" {
+		t.Fatalf("Token=%q, want abc", Current.Token)
+	}
+	stat, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stat.Mode().Perm(); got != _CONFIG_PERM {
+		t.Fatalf("perm=%o, want %o", got, _CONFIG_PERM)
 	}
 }
 
@@ -83,6 +93,31 @@ func TestInitialLoadTrimsOldTokenFile(t *testing.T) {
 	}
 	if Current.Token != "abc" {
 		t.Fatalf("Token=%q, want abc", Current.Token)
+	}
+}
+
+func TestInitialLoadChmodsExistingFile(t *testing.T) {
+	home := withHome(t)
+	dir := filepath.Join(home, ".config", DirName)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	path := configPath(home)
+	if err := os.WriteFile(path, []byte("token: x\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitialLoad(); err != nil {
+		t.Fatal(err)
+	}
+	stat, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stat.Mode().Perm(); got != _CONFIG_PERM {
+		t.Fatalf("perm=%o, want %o", got, _CONFIG_PERM)
+	}
+	if Current.Token != "x" {
+		t.Fatalf("Token=%q, want x", Current.Token)
 	}
 }
 

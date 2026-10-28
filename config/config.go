@@ -20,24 +20,50 @@ func InitialLoad() error {
 	cfg, err := load()
 	if err == nil {
 		Current = cfg
-		return nil
+		return chmodConfig()
 	}
 
 	Current = defaultConfig
-	if !os.IsNotExist(err) {
-		return err
+	if os.IsNotExist(err) {
+		configDir, derr := getDir()
+		if derr != nil {
+			return derr
+		}
+		if oldToken, rerr := os.ReadFile(filepath.Join(configDir, "token")); rerr == nil {
+			Current.Token = strings.TrimSpace(string(oldToken))
+		}
+		return save(Current)
 	}
 
-	configDir, err := getDir()
-	if err != nil {
-		return err
+	if raw, rerr := os.ReadFile(Path()); rerr == nil {
+		if tok := tokenFromYAML(raw); tok != "" {
+			Current.Token = tok
+		}
 	}
+	_ = chmodConfig()
+	return err
+}
 
-	if oldToken, err := os.ReadFile(filepath.Join(configDir, "token")); err == nil {
-		Current.Token = strings.TrimSpace(string(oldToken))
+func tokenFromYAML(content []byte) string {
+	for _, line := range strings.Split(string(content), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "token:") {
+			continue
+		}
+		return strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "token:")), `"'`)
 	}
+	return ""
+}
 
-	return save(Current)
+func chmodConfig() error {
+	path := Path()
+	if path == "" {
+		return nil
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil
+	}
+	return os.Chmod(path, _CONFIG_PERM)
 }
 
 func getDir() (string, error) {

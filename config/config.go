@@ -4,30 +4,66 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	_CONFIG_FILE = "config.yaml"
+	_CONFIG_PERM = 0600
 )
 
 var Current Config
 
 func InitialLoad() error {
-	var err error
-
-	Current, err = load()
-	if err != nil {
-		configDir, err := getDir()
-		if err != nil {
-			return err
-		}
-
-		if oldToken, err := os.ReadFile(filepath.Join(configDir, "token")); err == nil {
-			Current.Token = string(oldToken)
-		}
-
-		save(Current)
+	cfg, err := load()
+	if err == nil {
+		Current = cfg
+		return chmodConfig()
 	}
 
-	return nil
+	Current = defaultConfig
+	if os.IsNotExist(err) {
+		configDir, derr := getDir()
+		if derr != nil {
+			return derr
+		}
+		if oldToken, rerr := os.ReadFile(filepath.Join(configDir, "token")); rerr == nil {
+			Current.Token = strings.TrimSpace(string(oldToken))
+		}
+		return save(Current)
+	}
+
+	if raw, rerr := os.ReadFile(Path()); rerr == nil {
+		if tok := tokenFromYAML(raw); tok != "" {
+			Current.Token = tok
+		}
+	}
+	_ = chmodConfig()
+	return err
+}
+
+func tokenFromYAML(content []byte) string {
+	for _, line := range strings.Split(string(content), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "token:") {
+			continue
+		}
+		return strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "token:")), `"'`)
+	}
+	return ""
+}
+
+func chmodConfig() error {
+	path := Path()
+	if path == "" {
+		return nil
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil
+	}
+	return os.Chmod(path, _CONFIG_PERM)
 }
 
 func getDir() (string, error) {
@@ -51,7 +87,7 @@ func load() (Config, error) {
 		return defaultConfig, err
 	}
 
-	configContent, err := os.ReadFile(filepath.Join(configDir, "config.yaml"))
+	configContent, err := os.ReadFile(filepath.Join(configDir, _CONFIG_FILE))
 	if err != nil {
 		return defaultConfig, err
 	}
@@ -122,11 +158,16 @@ func save(conf Config) error {
 		return err
 	}
 
-	file, err := os.OpenFile(filepath.Join(configDir, "config.yaml"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	path := filepath.Join(configDir, _CONFIG_FILE)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, _CONFIG_PERM)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
+
+	if err := file.Chmod(_CONFIG_PERM); err != nil {
+		return err
+	}
 
 	enc := yaml.NewEncoder(file)
 	enc.SetIndent(4)
@@ -144,7 +185,7 @@ func Path() string {
 		return ""
 	}
 
-	return filepath.Join(configDir, "config.yaml")
+	return filepath.Join(configDir, _CONFIG_FILE)
 }
 
 func Save() error {

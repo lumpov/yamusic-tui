@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+### Исправлено
+
+- Текст песни: после 404 LRC и TEXT запрашивается `GET /tracks/{id}/supplement` (`fullLyrics`) ([#5](https://github.com/lumpov/yamusic-tui/pull/5)).
+- CI релиза: `macos-15` для darwin-arm64, `ubuntu-24.04`, Go из `go.mod`, повтор `go mod vendor` ([#5](https://github.com/lumpov/yamusic-tui/pull/5)).
+
 ## [0.9.0-beta.6] - 2026-10-28
 
 ### Безопасность

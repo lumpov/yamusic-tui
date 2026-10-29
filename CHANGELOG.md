@@ -1,0 +1,59 @@
+# Changelog
+
+Все значимые изменения проекта фиксируются в этом файле.
+
+Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
+проект следует [Semantic Versioning](https://semver.org/lang/ru/).
+
+## [Unreleased]
+
+### Исправлено
+
+- Текст песни: после 404 LRC и TEXT запрашивается `GET /tracks/{id}/supplement` (`fullLyrics`) ([#5](https://github.com/lumpov/yamusic-tui/pull/5)).
+- CI релиза: `macos-15` для darwin-arm64, `ubuntu-24.04`, Go из `go.mod`, повтор `go mod vendor` ([#5](https://github.com/lumpov/yamusic-tui/pull/5)).
+
+## [0.9.0-beta.6] - 2026-10-28
+
+### Безопасность
+
+- `config.yaml` пишется и приводится к правам `0600` (только владелец), в том числе если файл уже существовал с более открытыми правами ([#4](https://github.com/lumpov/yamusic-tui/pull/4)).
+
+### Исправлено
+
+- Ошибка разбора YAML больше не перезаписывает `config.yaml` умолчаниями; токен со строки `token:` сохраняется, приложение не открывает экран входа ([#4](https://github.com/lumpov/yamusic-tui/pull/4)).
+- Старый файл `token` читается через `TrimSpace` ([#4](https://github.com/lumpov/yamusic-tui/pull/4)).
+
+## [0.9.0-beta.4] - 2026-10-28
+
+### Изменено
+
+- Заголовок плейера: «Yandex Music player», строка версии и пометка `unofficial` ([#3](https://github.com/lumpov/yamusic-tui/pull/3)).
+
+### Исправлено
+
+- Ошибки `json.Decoder.Decode` в ответах API и OAuth больше не маскируются пустым успехом ([#3](https://github.com/lumpov/yamusic-tui/pull/3)).
+- `DurationMs` в `play-audio` и роторе уходит секундами (`DurationMs / 1000`), а не миллисекундами ([#3](https://github.com/lumpov/yamusic-tui/pull/3)).
+- Числовые `label.id` и `lyricId` разбираются без ошибки JSON ([#3](https://github.com/lumpov/yamusic-tui/pull/3)).
+- Текст песни: после 404 для LRC запрашивается TEXT; загрузка текста и обложки идёт через `httpClient`, тело ответа закрывается, не-200 отклоняется ([#3](https://github.com/lumpov/yamusic-tui/pull/3)).
+- `TimeLimitedReader` запускает таймер простоя на первом `Read`, а не в конструкторе ([#3](https://github.com/lumpov/yamusic-tui/pull/3)).
+
+## [0.9.0-beta.1] - 2026-10-27
+
+### Добавлено
+
+- На Darwin воспроизведение сжатого MP3 через AudioQueue, без декода в Go и без oto на горячем пути ([#1](https://github.com/lumpov/yamusic-tui/pull/1)).
+- Теги с дефисом (`v0.9.0-beta.N`) публикуются как GitHub pre-release ([#1](https://github.com/lumpov/yamusic-tui/pull/1)).
+
+### Изменено
+
+- TUI не перерисовывает прогресс и красит неактивным текстом, пока терминал без фокуса ([#1](https://github.com/lumpov/yamusic-tui/pull/1)).
+- Клавиши плейлистов: `+`/`-` вместо ctrl+up/down (на macOS эти сочетания не доходят до TUI) ([#1](https://github.com/lumpov/yamusic-tui/pull/1)).
+
+### Исправлено
+
+- Паники на пустых списках, nil-выборе, поиске плейлистов в `albumBlocks`, shuffle/ротор/лайки/кэш без элементов ([#2](https://github.com/lumpov/yamusic-tui/pull/2)).
+
+[Unreleased]: https://github.com/lumpov/yamusic-tui/compare/v0.9.0-beta.6...HEAD
+[0.9.0-beta.6]: https://github.com/lumpov/yamusic-tui/compare/v0.9.0-beta.4...v0.9.0-beta.6
+[0.9.0-beta.4]: https://github.com/lumpov/yamusic-tui/compare/v0.9.0-beta.1...v0.9.0-beta.4
+[0.9.0-beta.1]: https://github.com/lumpov/yamusic-tui/releases/tag/v0.9.0-beta.1

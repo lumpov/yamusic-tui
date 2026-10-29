@@ -189,28 +189,43 @@ func (m *Model) playTrack(track *api.Track) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		coverPath := m.coverFilePath(track)
-		coverFile, ferr := os.OpenFile(coverPath, os.O_CREATE|os.O_RDWR, 0755)
+		m.removeCoverFiles()
+		coverPath := m.coverFilePath()
+		if coverPath == "" {
+			return
+		}
+		coverFile, ferr := os.OpenFile(coverPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0600)
 		if ferr != nil {
 			log.Print(log.LVL_WARNIGN, "unable to open cover file [%s]: %s", coverPath, ferr)
 			return
 		}
-		defer coverFile.Close()
-		stat, serr := coverFile.Stat()
-		if serr != nil || stat.Size() == 0 {
-			cType, derr := api.DownloadTrackCover(coverFile, track, 200)
-			if derr != nil {
-				log.Print(log.LVL_WARNIGN, "unable to download track [%s] cover: %s", track.Id, derr)
-				return
+		keepCover := false
+		defer func() {
+			coverFile.Close()
+			if !keepCover {
+				os.Remove(coverPath)
 			}
-			coverType = cType
-			coverFile.Sync()
-			s, _ := coverFile.Stat()
-			buf := make([]byte, s.Size())
-			coverFile.Seek(0, io.SeekStart)
-			coverFile.Read(buf)
-			coverBytes = buf
+		}()
+		cType, derr := api.DownloadTrackCover(coverFile, track, 200)
+		if derr != nil {
+			log.Print(log.LVL_WARNIGN, "unable to download track [%s] cover: %s", track.Id, derr)
+			return
 		}
+		coverType = cType
+		if serr := coverFile.Sync(); serr != nil {
+			log.Print(log.LVL_WARNIGN, "unable to sync track [%s] cover: %s", track.Id, serr)
+			return
+		}
+		if _, err := coverFile.Seek(0, io.SeekStart); err != nil {
+			return
+		}
+		buf, rerr := io.ReadAll(coverFile)
+		if rerr != nil {
+			log.Print(log.LVL_WARNIGN, "unable to read track [%s] cover: %s", track.Id, rerr)
+			return
+		}
+		coverBytes = buf
+		keepCover = true
 	}()
 
 	if m.client != nil && track.Id != "" {

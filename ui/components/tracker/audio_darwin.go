@@ -448,22 +448,22 @@ func (p *darwinPlayer) Close() error {
 	p.playing = false
 	p.paused = true
 	close(p.stopCh)
-	if p.c != nil {
-		C.aqAbort(p.c)
-	}
+	c := p.c
 	done := p.feedDone
 	p.mu.Unlock()
 
+	if c != nil {
+		C.aqAbort(c)
+	}
 	if done != nil {
-		select {
-		case <-done:
-		case <-time.After(500 * time.Millisecond):
-		}
+		<-done
 	}
 
-	if p.c != nil {
-		C.aqDestroy(p.c)
-		p.c = nil
+	p.mu.Lock()
+	p.c = nil
+	p.mu.Unlock()
+	if c != nil {
+		C.aqDestroy(c)
 	}
 	darwinPlayers.Delete(uintptr(p.handle))
 	p.handle.Delete()

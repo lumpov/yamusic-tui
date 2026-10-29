@@ -90,3 +90,38 @@ func TestDarwinPlayerSeekAfterEOFRestartsFeed(t *testing.T) {
 		t.Fatal("Play after Seek must restart feed")
 	}
 }
+
+func TestDarwinPlayerCloseWaitsForFeedThenDestroys(t *testing.T) {
+	data := bytes.Repeat([]byte{0xFF, 0xFB, 0x90, 0x00}, 256)
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(data)), int64(len(data)))
+	defer buf.Close()
+
+	w := &readWrapper{trackBuffer: buf, source: buf, emitNextOnEOF: false}
+	p := newDarwinPlayer(w)
+	p.Play()
+	time.Sleep(30 * time.Millisecond)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Close()
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close blocked")
+	}
+
+	p.mu.Lock()
+	feeding := p.feeding
+	c := p.c
+	p.mu.Unlock()
+	if feeding {
+		t.Fatal("Close must stop feed before destroy")
+	}
+	if c != nil {
+		t.Fatal("Close must clear AQPlayer after feed exits")
+	}
+}

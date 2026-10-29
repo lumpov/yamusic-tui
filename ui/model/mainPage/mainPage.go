@@ -3,6 +3,7 @@ package mainpage
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/dece2183/yamusic-tui/api"
@@ -79,8 +80,10 @@ func New(mediaHandler handler.MediaHandler) *Model {
 
 func (m *Model) Run() error {
 	go m.mediaHandle()
+	m.removeCoverFiles()
 	_, err := m.program.Run()
 	m.tracker.Stop()
+	m.removeCoverFiles()
 	return err
 }
 
@@ -542,7 +545,7 @@ func (m *Model) mediaHandle() {
 			md := handler.TrackMetadata{
 				TrackId:      track.Id,
 				Length:       time.Duration(track.DurationMs) * time.Millisecond,
-				CoverUrl:     m.coverFilePath(track),
+				CoverUrl:     m.coverFilePath(),
 				AlbumName:    albumName,
 				AlbumArtists: albumArtists,
 				Artists:      artists,
@@ -559,12 +562,28 @@ func (m *Model) mediaHandle() {
 	}
 }
 
-func (m *Model) coverFilePath(track *api.Track) string {
+func (m *Model) coverFilePath() string {
 	tempDir := filepath.Join(os.TempDir(), config.DirName)
 	if os.MkdirAll(tempDir, 0755) != nil {
 		return ""
 	}
-	return filepath.Join(tempDir, track.Id+".jpg")
+	return filepath.Join(tempDir, "cover.jpg")
+}
+
+func (m *Model) removeCoverFiles() {
+	tempDir := filepath.Join(os.TempDir(), config.DirName)
+	entries, err := os.ReadDir(tempDir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(strings.ToLower(e.Name()), ".jpg") {
+			os.Remove(filepath.Join(tempDir, e.Name()))
+		}
+	}
 }
 
 func (m *Model) metadataFilePath() string {

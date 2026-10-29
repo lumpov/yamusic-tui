@@ -13,6 +13,7 @@
 
 ### Исправлено
 
+- Если у текста песни нет меток времени, вместо статичных строк показывается `No lyrics timestamps for this track` (как `No lyrics for this track`, когда текста нет).
 - Медиакнопки (MPRIS, SMTC, macOS Now Playing) больше не вызывают Play, Pause, Rewind, SetPos, SetVolume и перемешивание плейлиста из горутины обработчика. Команда уходит в `program.Send`, состояние плеера меняется в `Update` ([#9](https://github.com/lumpov/yamusic-tui/pull/9)).
 - Плавное изменение громкости меняет плеер в `Update`, а не из горутины `volumeFader` ([#9](https://github.com/lumpov/yamusic-tui/pull/9)).
 - Текст песни: после 404 LRC и TEXT запрашивается `GET /tracks/{id}/supplement` (`fullLyrics`) ([#5](https://github.com/lumpov/yamusic-tui/pull/5)).

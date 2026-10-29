@@ -654,9 +654,7 @@ func (m *Model) renderLyrics() string {
 				}
 			}
 		} else {
-			previousLine = m.tryGetLyricsLine(0)
-			currentLine = m.tryGetLyricsLine(1)
-			nextLine = m.tryGetLyricsLine(2)
+			currentLine = "No lyrics timestamps for this track"
 		}
 	}
 

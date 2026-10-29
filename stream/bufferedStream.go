@@ -23,9 +23,10 @@ type BufferedStream struct {
 	readBuffer  []byte
 	readIndex   int64
 	totalSize   int64
-	buffered    bool
-	done        bool
-	mux         sync.Mutex
+	buffered     bool
+	done         bool
+	sourceClosed bool
+	mux          sync.Mutex
 }
 
 func NewBufferedStream(source io.ReadCloser, totalSize int64) *BufferedStream {
@@ -52,13 +53,18 @@ func (h *BufferedStream) Close() error {
 
 	h.readBuffer = nil
 	h.stopBuffering()
-
-	if !h.done {
-		err = h.source.Close()
-		h.done = true
-	}
+	h.done = true
+	err = h.closeSource()
 
 	return err
+}
+
+func (h *BufferedStream) closeSource() error {
+	if h.sourceClosed || h.source == nil {
+		return nil
+	}
+	h.sourceClosed = true
+	return h.source.Close()
 }
 
 func (h *BufferedStream) Read(dest []byte) (n int, err error) {
@@ -71,6 +77,9 @@ func (h *BufferedStream) Read(dest []byte) (n int, err error) {
 		newFrame := make([]byte, (h.readIndex-readBufLen)+destLen)
 		n, err = io.ReadFull(h.source, newFrame)
 		h.readBuffer = append(h.readBuffer, newFrame[:n]...)
+		if err == io.ErrUnexpectedEOF {
+			err = io.EOF
+		}
 		if h.readIndex < int64(len(h.readBuffer)) {
 			copy(dest, h.readBuffer[h.readIndex:])
 		} else {
@@ -105,8 +114,8 @@ func (h *BufferedStream) Read(dest []byte) (n int, err error) {
 	}
 
 	if err != nil {
-		if err == io.EOF && !h.done {
-			h.source.Close()
+		if err == io.EOF && !h.sourceClosed {
+			h.closeSource()
 			h.stopBuffering()
 			h.done = true
 		} else if err == http.ErrBodyReadAfterClose {
@@ -192,10 +201,12 @@ func (h *BufferedStream) BufferAll() {
 	}
 
 	h.readBuffer = append(h.readBuffer, newFrame...)
-	h.source.Close()
+	h.closeSource()
 }
 
 func (h *BufferedStream) WriteTo(dest io.Writer) (int64, error) {
+	h.mux.Lock()
+	defer h.mux.Unlock()
 	n, err := dest.Write(h.readBuffer)
 	return int64(n), err
 }
@@ -227,13 +238,14 @@ func (h *BufferedStream) bufferFrames(size int64) {
 
 		buf := make([]byte, size)
 		n, err := io.ReadFull(h.source, buf)
-		if err == nil || err == io.EOF {
+		if n > 0 {
 			h.readBuffer = append(h.readBuffer, buf[:n]...)
-			if err == io.EOF {
-				h.stopBuffering()
-				h.mux.Unlock()
-				return
-			}
+		}
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			h.stopBuffering()
+			h.lastError = io.EOF
+			h.mux.Unlock()
+			return
 		}
 
 		h.lastError = err

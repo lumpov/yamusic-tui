@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Изменено
+
+- Перемотка по умолчанию: `shift+right` / `shift+left` вместо `ctrl+right` / `ctrl+left`. На macOS Control+←/→ забирает Mission Control (переключение рабочих столов), нажатие не доходит до TUI. Alt+стрелки забирают смену панелей в Windows Terminal и перемещение фокуса в оконных менеджерах, где Alt — основная модификаторная клавиша. Shift+стрелки на macOS, Linux и Windows доходят до приложения ([#7](https://github.com/lumpov/yamusic-tui/pull/7)).
+
 ### Исправлено
 
 - Текст песни: после 404 LRC и TEXT запрашивается `GET /tracks/{id}/supplement` (`fullLyrics`) ([#5](https://github.com/lumpov/yamusic-tui/pull/5)).

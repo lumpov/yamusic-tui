@@ -29,9 +29,17 @@ var (
 	file *os.File
 )
 
+const (
+	_FILE_PERM os.FileMode = 0600
+	_DIR_PERM  os.FileMode = 0700
+)
+
 func getLogLocation() (string, error) {
 	tempDir := filepath.Join(os.TempDir(), config.DirName)
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
+	if err := os.MkdirAll(tempDir, _DIR_PERM); err != nil {
+		return "", err
+	}
+	if err := os.Chmod(tempDir, _DIR_PERM); err != nil {
 		return "", err
 	}
 	return filepath.Join(tempDir, config.DirName+".log"), nil
@@ -51,7 +59,15 @@ func Start() {
 		return
 	}
 
-	file, _ = os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, _FILE_PERM)
+	if err != nil {
+		return
+	}
+	if err := f.Chmod(_FILE_PERM); err != nil {
+		f.Close()
+		return
+	}
+	file = f
 }
 
 func Stop() {

@@ -17,7 +17,7 @@ func (m *Model) cacheCurrentTrack() tea.Cmd {
 		return nil
 	}
 
-	metadataFile, err := os.OpenFile(m.metadataFilePath(), os.O_RDONLY, 0755)
+	metadataFile, err := openOwnerFile(m.metadataFilePath(), os.O_RDONLY)
 	if err != nil {
 		log.Print(log.LVL_ERROR, "failed to open cache file: %s", err)
 		m.tracker.ShowError("cache open")

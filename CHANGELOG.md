@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Безопасность
+
+- Каталоги приложения (`~/.config/yamusic-tui`, кэш, `$TMPDIR/yamusic-tui`) приводятся к `0700`. Файлы лога, кэша MP3, обложки и metadata — к `0600`, в том числе если они уже существовали с `0755`.
+
 ### Изменено
 
 - Перемотка по умолчанию: `shift+right` / `shift+left` вместо `ctrl+right` / `ctrl+left`. На macOS Control+←/→ забирает Mission Control (переключение рабочих столов), нажатие не доходит до TUI. Alt+стрелки забирают смену панелей в Windows Terminal и перемещение фокуса в оконных менеджерах, где Alt — основная модификаторная клавиша. Shift+стрелки на macOS, Linux и Windows доходят до приложения ([#7](https://github.com/lumpov/yamusic-tui/pull/7)).

@@ -13,6 +13,8 @@
 
 ### Исправлено
 
+- Медиакнопки (MPRIS, SMTC, macOS Now Playing) больше не вызывают Play, Pause, Rewind, SetPos, SetVolume и перемешивание плейлиста из горутины обработчика. Команда уходит в `program.Send`, состояние плеера меняется в `Update` ([#9](https://github.com/lumpov/yamusic-tui/pull/9)).
+- Плавное изменение громкости меняет плеер в `Update`, а не из горутины `volumeFader` ([#9](https://github.com/lumpov/yamusic-tui/pull/9)).
 - Текст песни: после 404 LRC и TEXT запрашивается `GET /tracks/{id}/supplement` (`fullLyrics`) ([#5](https://github.com/lumpov/yamusic-tui/pull/5)).
 - CI релиза: `macos-15` для darwin-arm64, `ubuntu-24.04`, Go из `go.mod`, повтор `go mod vendor` ([#5](https://github.com/lumpov/yamusic-tui/pull/5)).
 

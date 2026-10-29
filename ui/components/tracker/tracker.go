@@ -35,6 +35,7 @@ const (
 	BUFFERING_COMPLETE
 	TOGGLE_LYRICS
 	TOGGLE_VIEW
+	PLAYPAUSE
 )
 
 type ProgressControl float64
@@ -50,7 +51,12 @@ const (
 	_REWIND_SETTLE         = 200 * time.Millisecond
 )
 
+type SeekBy time.Duration
+type SeekTo time.Duration
+type VolumeTo float64
+
 type rewindSettleMsg uint64
+type volumeFadeTickMsg struct{}
 
 type Model struct {
 	width      int
@@ -298,7 +304,26 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 			m.Pause()
 		case STOP:
 			m.Stop()
+		case PLAYPAUSE:
+			if m.player != nil && m.player.IsPlaying() {
+				m.Pause()
+			} else {
+				m.Play()
+			}
 		}
+
+	case SeekBy:
+		cmd = m.Rewind(time.Duration(msg))
+		cmds = append(cmds, cmd)
+
+	case SeekTo:
+		m.SetPos(time.Duration(msg))
+
+	case VolumeTo:
+		m.SetVolume(float64(msg))
+
+	case volumeFadeTickMsg:
+		m.volumeFadeTick()
 
 	// track progress update
 	case ProgressControl:
@@ -600,7 +625,14 @@ func (m *Model) volumeFadeTick() {
 func (m *Model) volumeFader() {
 	t := time.NewTicker(_VOLUME_FADE_PERIOD)
 	for range t.C {
-		m.volumeFadeTick()
+		if m.program == nil {
+			m.volumeFadeTick()
+			continue
+		}
+		if m.player == nil {
+			continue
+		}
+		m.program.Send(volumeFadeTickMsg{})
 	}
 }
 

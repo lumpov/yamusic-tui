@@ -98,6 +98,8 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(tea.SetWindowTitle(config.DirName), m.spinner.Tick)
 }
 
+type mediaShuffleMsg struct{}
+
 func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		cmd  tea.Cmd
@@ -304,6 +306,13 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tracker.PAUSE:
 			m.mediaHandler.OnPlayPause()
+		case tracker.PLAYPAUSE:
+			if m.tracker.IsStoped() {
+				cmd = m.playSelected()
+				cmds = append(cmds, cmd)
+			} else {
+				m.mediaHandler.OnPlayPause()
+			}
 		case tracker.STOP:
 			m.mediaHandler.OnEnded()
 		case tracker.REWIND:
@@ -324,6 +333,28 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.tracker, cmd = m.tracker.Update(message)
 		cmds = append(cmds, cmd)
 
+	case tracker.SeekBy:
+		m.tracker, cmd = m.tracker.Update(message)
+		cmds = append(cmds, cmd)
+		m.mediaHandler.OnSeek(m.tracker.Position())
+	case tracker.SeekTo:
+		m.tracker, cmd = m.tracker.Update(message)
+		cmds = append(cmds, cmd)
+		m.mediaHandler.OnSeek(m.tracker.Position())
+	case tracker.VolumeTo:
+		m.tracker, cmd = m.tracker.Update(message)
+		cmds = append(cmds, cmd)
+		m.mediaHandler.OnVolume()
+	case mediaShuffleMsg:
+		items := m.playlists.Items()
+		if m.currentPlaylistIndex >= 0 && m.currentPlaylistIndex < len(items) {
+			currentPlaylist := items[m.currentPlaylistIndex]
+			if len(currentPlaylist.Tracks) > 0 && currentPlaylist.Kind >= playlist.LIKES {
+				cmd = m.shufflePlaylist(currentPlaylist)
+				cmds = append(cmds, cmd)
+			}
+		}
+
 	// search control update
 	case search.Control:
 		if m.isSearchActive {
@@ -341,6 +372,8 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 
 	default:
+		m.tracker, cmd = m.tracker.Update(message)
+		cmds = append(cmds, cmd)
 		if m.isLoading {
 			m.spinner, cmd = m.spinner.Update(message)
 			cmds = append(cmds, cmd)
@@ -354,8 +387,6 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.playlists, cmd = m.playlists.Update(message)
 			cmds = append(cmds, cmd)
 			m.tracklist, cmd = m.tracklist.Update(message)
-			cmds = append(cmds, cmd)
-			m.tracker, cmd = m.tracker.Update(message)
 			cmds = append(cmds, cmd)
 		}
 	}
@@ -423,61 +454,56 @@ func (m *Model) resize(width, height int) {
 	m.inputDialog.SetWidth(searchWidth)
 }
 
+func mediaPlaybackMsg(msg handler.Message) tea.Msg {
+	switch msg.Type {
+	case handler.MSG_NEXT:
+		return tracker.NEXT
+	case handler.MSG_PREVIOUS:
+		return tracker.PREV
+	case handler.MSG_PLAY:
+		return tracker.PLAY
+	case handler.MSG_PAUSE:
+		return tracker.PAUSE
+	case handler.MSG_PLAYPAUSE:
+		return tracker.PLAYPAUSE
+	case handler.MSG_STOP:
+		return tracker.STOP
+	case handler.MSG_SEEK:
+		offset, ok := msg.Arg.(time.Duration)
+		if !ok {
+			return nil
+		}
+		return tracker.SeekBy(offset)
+	case handler.MSG_SETPOS:
+		pos, ok := msg.Arg.(time.Duration)
+		if !ok {
+			return nil
+		}
+		return tracker.SeekTo(pos)
+	case handler.MSG_SET_VOLUME:
+		vol, ok := msg.Arg.(float64)
+		if !ok {
+			return nil
+		}
+		return tracker.VolumeTo(vol)
+	case handler.MSG_SET_SHUFFLE:
+		val, ok := msg.Arg.(bool)
+		if !ok || !val {
+			return nil
+		}
+		return mediaShuffleMsg{}
+	default:
+		return nil
+	}
+}
+
 func (m *Model) mediaHandle() {
 	for msg := range m.mediaHandler.Message() {
+		if playMsg := mediaPlaybackMsg(msg); playMsg != nil {
+			m.Send(playMsg)
+			continue
+		}
 		switch msg.Type {
-		case handler.MSG_NEXT:
-			m.Send(tracker.NEXT)
-		case handler.MSG_PREVIOUS:
-			m.Send(tracker.PREV)
-		case handler.MSG_PLAY:
-			m.tracker.Play()
-			m.Send(tracker.PLAY)
-		case handler.MSG_PAUSE:
-			m.tracker.Pause()
-			m.Send(tracker.PAUSE)
-		case handler.MSG_PLAYPAUSE:
-			if m.tracker.IsPlaying() {
-				m.tracker.Pause()
-				m.Send(tracker.PAUSE)
-			} else {
-				m.tracker.Play()
-				m.Send(tracker.PLAY)
-			}
-		case handler.MSG_STOP:
-			m.Send(tracker.STOP)
-		case handler.MSG_SEEK:
-			offset, ok := msg.Arg.(time.Duration)
-			if ok {
-				m.tracker.Rewind(offset)
-			}
-		case handler.MSG_SETPOS:
-			pos, ok := msg.Arg.(time.Duration)
-			if ok {
-				m.tracker.SetPos(pos)
-			}
-
-		case handler.MSG_SET_SHUFFLE:
-			val, ok := msg.Arg.(bool)
-			if !ok || !val {
-				break
-			}
-			currentPlaylist := m.playlists.Items()[m.currentPlaylistIndex]
-			if len(currentPlaylist.Tracks) == 0 {
-				break
-			}
-			if currentPlaylist.Kind >= playlist.LIKES {
-				cmd := m.shufflePlaylist(currentPlaylist)
-				m.Send(func() tea.Cmd {
-					return cmd
-				})
-			}
-		case handler.MSG_SET_VOLUME:
-			vol, ok := msg.Arg.(float64)
-			if ok {
-				m.tracker.SetVolume(vol)
-			}
-
 		case handler.MSG_GET_PLAYBACKSTATUS:
 			var state handler.PlaybackState
 			if m.tracker.IsPlaying() {

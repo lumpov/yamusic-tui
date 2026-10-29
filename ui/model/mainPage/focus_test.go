@@ -2,6 +2,7 @@ package mainpage
 
 import (
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -28,6 +29,12 @@ func TestSkipUIProgressWhenBlurred(t *testing.T) {
 	}
 	if skipUIProgress(false, tracker.NEXT) {
 		t.Fatal("playback controls must not be skipped while blurred")
+	}
+	if skipUIProgress(false, tracker.SeekBy(time.Second)) {
+		t.Fatal("media seek must not be skipped while blurred")
+	}
+	if skipUIProgress(false, tracker.PLAYPAUSE) {
+		t.Fatal("media playpause must not be skipped while blurred")
 	}
 }
 

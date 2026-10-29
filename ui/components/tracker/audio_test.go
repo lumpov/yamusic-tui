@@ -98,3 +98,78 @@ func TestRewindSeeksCompressedOffset(t *testing.T) {
 		t.Fatal("Rewind must seek the player")
 	}
 }
+
+func TestRewindStartStaysAtZero(t *testing.T) {
+	config.InitTest()
+	fp := &fakePlayer{playing: true}
+	m := NewForTest()
+	m.player = fp
+	m.paused = false
+	m.rewindAmount = 5 * time.Second
+	m.track = api.Track{DurationMs: 60000}
+	m.trackWrapper = &readWrapper{
+		trackBuffer: stream.NewBufferedStream(io.NopCloser(bytes.NewReader(make([]byte, 60000))), 60000),
+	}
+	defer m.trackWrapper.trackBuffer.Close()
+
+	m.Rewind(-5 * time.Second)
+	if fp.offset != 0 {
+		t.Fatalf("start offset=%d, want 0", fp.offset)
+	}
+}
+
+func TestRewindEndKeepsRewindStep(t *testing.T) {
+	config.InitTest()
+	fp := &fakePlayer{playing: true}
+	m := NewForTest()
+	m.player = fp
+	m.paused = false
+	m.rewindAmount = 5 * time.Second
+	m.track = api.Track{DurationMs: 60000}
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(make([]byte, 60000))), 60000)
+	defer buf.Close()
+	m.trackWrapper = &readWrapper{trackBuffer: buf}
+	_, _ = buf.Seek(59000, io.SeekStart)
+
+	m.Rewind(5 * time.Second)
+	if fp.offset >= 60000 {
+		t.Fatalf("must not seek to end, offset=%d", fp.offset)
+	}
+	if fp.offset != 55000 {
+		t.Fatalf("offset=%d, want 55000", fp.offset)
+	}
+}
+
+func TestRewindPausesUntilSettle(t *testing.T) {
+	config.InitTest()
+	fp := &fakePlayer{playing: true}
+	m := NewForTest()
+	m.player = fp
+	m.paused = false
+	m.rewindAmount = 5 * time.Second
+	m.track = api.Track{DurationMs: 60000}
+	m.trackWrapper = &readWrapper{
+		trackBuffer: stream.NewBufferedStream(io.NopCloser(bytes.NewReader(make([]byte, 60000))), 60000),
+	}
+	defer m.trackWrapper.trackBuffer.Close()
+
+	m.Rewind(5 * time.Second)
+	if !m.paused {
+		t.Fatal("rewind burst must pause")
+	}
+	if fp.pauses == 0 {
+		t.Fatal("player must Pause during rewind")
+	}
+	plays := fp.plays
+	m.Rewind(5 * time.Second)
+	if fp.plays != plays {
+		t.Fatal("second rewind must not Play")
+	}
+	m.finishRewindBurst()
+	if fp.plays <= plays {
+		t.Fatal("settle must Play")
+	}
+	if m.paused {
+		t.Fatal("settle must clear paused")
+	}
+}

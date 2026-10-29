@@ -37,3 +37,27 @@ func TestReadWrapperNilProgramDoesNotPanic(t *testing.T) {
 	w.sendNext()
 	w.send(STOP)
 }
+
+func TestReadWrapperSeekClearsTrackDone(t *testing.T) {
+	data := bytes.Repeat([]byte{1}, 32)
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(data)), int64(len(data)))
+	defer buf.Close()
+
+	w := &readWrapper{program: nil, source: buf, trackBuffer: buf, emitNextOnEOF: false}
+	dest := make([]byte, 8)
+	for i := 0; i < 16; i++ {
+		_, err := w.Read(dest)
+		if err == io.EOF {
+			break
+		}
+	}
+	if !w.trackDone {
+		t.Fatal("full read must set trackDone")
+	}
+	if _, err := w.Seek(0, io.SeekStart); err != nil {
+		t.Fatal(err)
+	}
+	if w.trackDone {
+		t.Fatal("Seek must clear trackDone")
+	}
+}

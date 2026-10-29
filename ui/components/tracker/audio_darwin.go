@@ -29,6 +29,8 @@ typedef struct {
 	int started;
 	int wantPlay;
 	int finishing;
+	int seekEpoch;
+	int discontinuity;
 	float volume;
 	AudioFileTypeID fileType;
 } AQPlayer;
@@ -60,9 +62,9 @@ static void runningListener(void *ud, AudioQueueRef q, AudioQueuePropertyID id) 
 	}
 }
 
-static int waitFreeBuffer(AQPlayer *p) {
+static int waitFreeBuffer(AQPlayer *p, int epoch) {
 	pthread_mutex_lock(&p->mu);
-	while (!p->closed) {
+	while (!p->closed && p->seekEpoch == epoch) {
 		for (int i = 0; i < AQ_NUM_BUFFERS; i++) {
 			if (!p->bufferInUse[i] && p->buffers[i] != NULL) {
 				int idx = i;
@@ -88,10 +90,19 @@ static void packetsProc(void *ud, UInt32 numBytes, UInt32 numPackets, const void
 	if (p->queue == NULL || numBytes == 0) {
 		return;
 	}
-	int idx = waitFreeBuffer(p);
+	pthread_mutex_lock(&p->mu);
+	int epoch = p->seekEpoch;
+	pthread_mutex_unlock(&p->mu);
+	int idx = waitFreeBuffer(p, epoch);
 	if (idx < 0) {
 		return;
 	}
+	pthread_mutex_lock(&p->mu);
+	if (p->seekEpoch != epoch || p->closed) {
+		pthread_mutex_unlock(&p->mu);
+		return;
+	}
+	pthread_mutex_unlock(&p->mu);
 
 	AudioQueueBufferRef buf = p->buffers[idx];
 	if (numBytes > buf->mAudioDataBytesCapacity) {
@@ -111,6 +122,10 @@ static void packetsProc(void *ud, UInt32 numBytes, UInt32 numPackets, const void
 	}
 
 	pthread_mutex_lock(&p->mu);
+	if (p->seekEpoch != epoch || p->closed) {
+		pthread_mutex_unlock(&p->mu);
+		return;
+	}
 	p->bufferInUse[idx] = 1;
 	int wantStart = p->wantPlay && !p->started && !p->closed;
 	if (wantStart) {
@@ -186,10 +201,22 @@ static AQPlayer* aqCreate(uintptr_t goHandle, uint32_t fileType) {
 }
 
 static int aqParse(AQPlayer *p, const void *data, uint32_t size) {
-	if (!p || p->closed || !p->stream || size == 0) {
+	if (!p || size == 0) {
 		return -1;
 	}
-	return AudioFileStreamParseBytes(p->stream, size, data, 0);
+	pthread_mutex_lock(&p->mu);
+	if (p->closed || !p->stream) {
+		pthread_mutex_unlock(&p->mu);
+		return -1;
+	}
+	AudioFileStreamID stream = p->stream;
+	UInt32 flags = 0;
+	if (p->discontinuity) {
+		flags = kAudioFileStreamParseFlag_Discontinuity;
+		p->discontinuity = 0;
+	}
+	pthread_mutex_unlock(&p->mu);
+	return AudioFileStreamParseBytes(stream, size, data, flags);
 }
 
 static void aqPlay(AQPlayer *p) {
@@ -201,13 +228,9 @@ static void aqPlay(AQPlayer *p) {
 	p->finishing = 0;
 	AudioQueueRef q = p->queue;
 	int started = p->started;
-	if (q != NULL) {
-		p->started = 1;
-	}
 	pthread_mutex_unlock(&p->mu);
-	if (q != NULL) {
+	if (q != NULL && started) {
 		AudioQueueStart(q, NULL);
-		(void)started;
 	}
 }
 
@@ -262,30 +285,49 @@ static void aqFinish(AQPlayer *p) {
 	}
 }
 
-static void aqSeekReset(AQPlayer *p) {
+static void aqSeekBegin(AQPlayer *p) {
 	if (!p || p->closed) {
 		return;
 	}
 	pthread_mutex_lock(&p->mu);
+	p->seekEpoch++;
 	p->finishing = 0;
 	p->started = 0;
 	for (int i = 0; i < AQ_NUM_BUFFERS; i++) {
 		p->bufferInUse[i] = 0;
 	}
 	AudioQueueRef q = p->queue;
-	AudioFileStreamID stream = p->stream;
-	p->stream = NULL;
 	pthread_cond_broadcast(&p->cv);
 	pthread_mutex_unlock(&p->mu);
-
 	if (q != NULL) {
 		AudioQueueStop(q, 1);
 		AudioQueueReset(q);
 	}
+}
+
+static void aqSeekFinish(AQPlayer *p) {
+	if (!p || p->closed) {
+		return;
+	}
+	pthread_mutex_lock(&p->mu);
+	AudioFileStreamID stream = p->stream;
+	p->stream = NULL;
+	p->discontinuity = 1;
+	pthread_mutex_unlock(&p->mu);
 	if (stream != NULL) {
 		AudioFileStreamClose(stream);
 	}
 	AudioFileStreamOpen(p, propertyListener, packetsProc, p->fileType, &p->stream);
+}
+
+static void aqAbort(AQPlayer *p) {
+	if (!p) {
+		return;
+	}
+	pthread_mutex_lock(&p->mu);
+	p->closed = 1;
+	pthread_cond_broadcast(&p->cv);
+	pthread_mutex_unlock(&p->mu);
 }
 
 static void aqDestroy(AQPlayer *p) {
@@ -322,6 +364,8 @@ import (
 	"sync"
 	"time"
 	"unsafe"
+
+	"github.com/dece2183/yamusic-tui/log"
 )
 
 var _ audioPlayer = (*darwinPlayer)(nil)
@@ -340,27 +384,29 @@ func (darwinBackend) Open(src *readWrapper) audioPlayer {
 }
 
 type darwinPlayer struct {
-	src      *readWrapper
-	handle   cgo.Handle
-	c        *C.AQPlayer
-	mu       sync.Mutex
-	ioMu     sync.Mutex
-	playing  bool
-	paused   bool
-	closed   bool
-	volume   float64
-	stopCh   chan struct{}
-	feedDone chan struct{}
-	feedOnce sync.Once
+	src         *readWrapper
+	handle      cgo.Handle
+	c           *C.AQPlayer
+	mu          sync.Mutex
+	ioMu        sync.Mutex
+	parseMu     sync.Mutex
+	playing     bool
+	paused      bool
+	closed      bool
+	feeding     bool
+	eofFinished bool
+	eofLogged   bool
+	volume      float64
+	stopCh      chan struct{}
+	feedDone    chan struct{}
 }
 
 func newDarwinPlayer(src *readWrapper) *darwinPlayer {
 	p := &darwinPlayer{
-		src:      src,
-		volume:   1,
-		paused:   true,
-		stopCh:   make(chan struct{}),
-		feedDone: make(chan struct{}),
+		src:    src,
+		volume: 1,
+		paused: true,
+		stopCh: make(chan struct{}),
 	}
 	p.handle = cgo.NewHandle(p)
 	darwinPlayers.Store(uintptr(p.handle), p)
@@ -378,9 +424,7 @@ func (p *darwinPlayer) Play() {
 	p.playing = true
 	p.mu.Unlock()
 	C.aqPlay(p.c)
-	p.feedOnce.Do(func() {
-		go p.feed()
-	})
+	p.startFeed()
 }
 
 func (p *darwinPlayer) Pause() {
@@ -404,14 +448,17 @@ func (p *darwinPlayer) Close() error {
 	p.playing = false
 	p.paused = true
 	close(p.stopCh)
+	if p.c != nil {
+		C.aqAbort(p.c)
+	}
+	done := p.feedDone
 	p.mu.Unlock()
 
-	p.feedOnce.Do(func() {
-		close(p.feedDone)
-	})
-	select {
-	case <-p.feedDone:
-	case <-time.After(500 * time.Millisecond):
+	if done != nil {
+		select {
+		case <-done:
+		case <-time.After(500 * time.Millisecond):
+		}
 	}
 
 	if p.c != nil {
@@ -448,15 +495,46 @@ func (p *darwinPlayer) Volume() float64 {
 
 func (p *darwinPlayer) Seek(offset int64, whence int) (int64, error) {
 	p.ioMu.Lock()
-	defer p.ioMu.Unlock()
 	if p.src == nil {
+		p.ioMu.Unlock()
 		return 0, io.EOF
 	}
 	pos, err := p.src.Seek(offset, whence)
+	p.mu.Lock()
+	p.eofFinished = false
+	p.eofLogged = false
+	p.mu.Unlock()
 	if p.c != nil {
-		C.aqSeekReset(p.c)
+		C.aqSeekBegin(p.c)
 	}
+	p.ioMu.Unlock()
+	p.parseMu.Lock()
+	if p.c != nil {
+		C.aqSeekFinish(p.c)
+	}
+	p.parseMu.Unlock()
 	return pos, err
+}
+
+func (p *darwinPlayer) startFeed() {
+	p.mu.Lock()
+	if p.closed || p.feeding {
+		p.mu.Unlock()
+		return
+	}
+	p.feeding = true
+	done := make(chan struct{})
+	p.feedDone = done
+	p.mu.Unlock()
+	go func() {
+		defer close(done)
+		defer func() {
+			p.mu.Lock()
+			p.feeding = false
+			p.mu.Unlock()
+		}()
+		p.feed()
+	}()
 }
 
 func (p *darwinPlayer) IsPlaying() bool {
@@ -466,7 +544,6 @@ func (p *darwinPlayer) IsPlaying() bool {
 }
 
 func (p *darwinPlayer) feed() {
-	defer close(p.feedDone)
 	buf := make([]byte, 16*1024)
 	for {
 		select {
@@ -489,18 +566,39 @@ func (p *darwinPlayer) feed() {
 
 		p.ioMu.Lock()
 		n, err := p.src.Read(buf)
-		if n > 0 && p.c != nil {
-			C.aqParse(p.c, unsafe.Pointer(&buf[0]), C.uint32_t(n))
-		}
 		p.ioMu.Unlock()
+		if n > 0 && p.c != nil {
+			p.parseMu.Lock()
+			C.aqParse(p.c, unsafe.Pointer(&buf[0]), C.uint32_t(n))
+			p.parseMu.Unlock()
+		}
 
 		if err == io.EOF {
-			if p.c != nil {
-				C.aqFinish(p.c)
-			} else if p.src != nil {
-				p.src.sendNext()
+			progress := 0.0
+			if p.src != nil {
+				progress = p.src.Progress()
 			}
-			return
+			p.mu.Lock()
+			if !p.eofLogged {
+				p.eofLogged = true
+				p.mu.Unlock()
+				log.Print(log.LVL_INFO, "darwin feed EOF progress=%.4f", progress)
+				p.mu.Lock()
+			}
+			finish := progress >= 0.99 && !p.eofFinished
+			if finish {
+				p.eofFinished = true
+			}
+			p.mu.Unlock()
+			if finish {
+				if p.c != nil {
+					C.aqFinish(p.c)
+				} else if p.src != nil {
+					p.src.sendNext()
+				}
+			}
+			time.Sleep(20 * time.Millisecond)
+			continue
 		}
 		if n == 0 {
 			time.Sleep(20 * time.Millisecond)

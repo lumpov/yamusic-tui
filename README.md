@@ -104,8 +104,8 @@ controls:
    player-pause: space
    player-next: right
    player-previous: left
-   player-rewind-forward: ctrl+right
-   player-rewind-backward: ctrl+left
+   player-rewind-forward: shift+right
+   player-rewind-backward: shift+left
    player-like: L
    player-cache: S
    player-vol-up: ']'

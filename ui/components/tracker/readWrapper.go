@@ -65,6 +65,7 @@ func (w *readWrapper) Seek(offset int64, whence int) (int64, error) {
 	if w.source == nil {
 		return 0, io.EOF
 	}
+	w.trackDone = false
 	return w.source.Seek(offset, whence)
 }
 

@@ -33,3 +33,15 @@ func TestClampByteOffset(t *testing.T) {
 		t.Fatalf("got %d, want 40", got)
 	}
 }
+
+func TestClampPlayableByteOffsetKeepsRewindStep(t *testing.T) {
+	if got := clampPlayableByteOffset(-10, 1000, 50); got != 0 {
+		t.Fatalf("start: got %d, want 0", got)
+	}
+	if got := clampPlayableByteOffset(1000, 1000, 50); got != 950 {
+		t.Fatalf("end: got %d, want 950", got)
+	}
+	if got := clampPlayableByteOffset(2000, 100, 200); got != 0 {
+		t.Fatalf("step larger than track: got %d, want 0", got)
+	}
+}

@@ -173,3 +173,75 @@ func TestRewindPausesUntilSettle(t *testing.T) {
 		t.Fatal("settle must clear paused")
 	}
 }
+
+func TestPlayPauseControlTogglesPlayback(t *testing.T) {
+	config.InitTest()
+	fp := &fakePlayer{playing: true}
+	m := NewForTest()
+	m.player = fp
+	m.paused = false
+	m.trackWrapper = &readWrapper{
+		trackBuffer: stream.NewBufferedStream(io.NopCloser(bytes.NewReader(make([]byte, 8))), 8),
+	}
+	defer m.trackWrapper.trackBuffer.Close()
+
+	m.Update(PLAYPAUSE)
+	if !m.paused {
+		t.Fatal("PLAYPAUSE while playing must pause")
+	}
+
+	fp.playing = false
+	m.Update(PLAYPAUSE)
+	if m.paused {
+		t.Fatal("PLAYPAUSE while paused must play")
+	}
+}
+
+func TestSeekByUpdateRewinds(t *testing.T) {
+	config.InitTest()
+	fp := &fakePlayer{playing: true}
+	m := NewForTest()
+	m.player = fp
+	m.paused = false
+	m.rewindAmount = 5 * time.Second
+	m.track = api.Track{DurationMs: 60000}
+	m.trackWrapper = &readWrapper{
+		trackBuffer: stream.NewBufferedStream(io.NopCloser(bytes.NewReader(make([]byte, 60000))), 60000),
+	}
+	defer m.trackWrapper.trackBuffer.Close()
+
+	_, cmd := m.Update(SeekBy(5 * time.Second))
+	if cmd == nil {
+		t.Fatal("SeekBy must return settle command")
+	}
+	if fp.offset == 0 {
+		t.Fatal("SeekBy must seek")
+	}
+}
+
+func TestVolumeToUpdateSetsVolume(t *testing.T) {
+	config.InitTest()
+	m := NewForTest()
+	m.Update(VolumeTo(0.3))
+	if m.volume != 0.3 {
+		t.Fatalf("volume=%f, want 0.3", m.volume)
+	}
+}
+
+func TestVolumeFadeTickMsgPausesPlayer(t *testing.T) {
+	config.InitTest()
+	m := NewForTest()
+	fp := m.audio.(*fakeBackend).player
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader([]byte{0, 1, 2, 3, 4, 5, 6, 7})), 8)
+	defer buf.Close()
+	m.StartTrack(&api.Track{Id: "1", Title: "t", DurationMs: 1000, Available: true}, buf, nil)
+	fp.volume = m.volume
+	m.Pause()
+
+	for i := 0; i < 8 && fp.pauses == 0; i++ {
+		m.Update(volumeFadeTickMsg{})
+	}
+	if fp.pauses == 0 {
+		t.Fatal("volumeFadeTickMsg must Pause the player after fade-out")
+	}
+}

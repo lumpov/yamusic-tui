@@ -182,6 +182,7 @@ var handlerMu sync.Mutex
 
 type MacosHandler struct {
 	msgMux  sync.Mutex
+	closed  bool
 	msgChan chan handler.Message
 	ansChan chan any
 }
@@ -218,12 +219,14 @@ func (mh *MacosHandler) Start(handler func() error) error {
 	// This is required for MPRemoteCommandCenter and NSEvent monitoring to work.
 	C.runCocoaMain()
 
-	close(mh.msgChan)
-	close(mh.ansChan)
-
 	handlerMu.Lock()
 	globalHandler = nil
 	handlerMu.Unlock()
+	mh.msgMux.Lock()
+	mh.closed = true
+	close(mh.msgChan)
+	close(mh.ansChan)
+	mh.msgMux.Unlock()
 
 	return err
 }
@@ -248,6 +251,10 @@ func (mh *MacosHandler) OnVolume() {
 
 func (mh *MacosHandler) OnPlayback() {
 	mh.msgMux.Lock()
+	if mh.closed {
+		mh.msgMux.Unlock()
+		return
+	}
 	mh.msgChan <- handler.Message{
 		Type: handler.MSG_GET_METADATA,
 	}
@@ -293,9 +300,11 @@ func sendMsg(msg handler.Message) {
 	}
 
 	mh.msgMux.Lock()
-	select {
-	case mh.msgChan <- msg:
-	default:
+	if !mh.closed {
+		select {
+		case mh.msgChan <- msg:
+		default:
+		}
 	}
 	mh.msgMux.Unlock()
 }

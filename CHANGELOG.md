@@ -14,6 +14,7 @@
 
 ### Исправлено
 
+- После выхода обработчик медиа не закрывает `msgChan`, пока горутины и колбэки ещё могут писать: Windows ждёт `updateTimeline`, macOS обнуляет handler до `close`, Linux MPRIS ставит `closed` после `Stop`.
 - Перемотка не переключает трек: позиция ограничена `[0, duration − шаг]`, `SeekEnd` не вызывается. Буфер стрима сохраняет хвост кадра при `UnexpectedEOF`, HTTP-тело закрывается всегда, `WriteTo` копирует снимок под `mux`. На Darwin после mid-track EOF feed продолжает кормить AudioQueue ([#7](https://github.com/lumpov/yamusic-tui/pull/7)).
 - Darwin: `Close` дожидается выхода feed, затем `AudioQueueStop` и `AudioQueueDispose`. `AQPlayer` больше не освобождается по таймауту 500 мс, пока `aqParse` / колбэки очереди ещё могут работать с этим указателем ([#13](https://github.com/lumpov/yamusic-tui/pull/13)).
 - Медиакнопки (MPRIS, SMTC, macOS Now Playing) больше не вызывают Play, Pause, Rewind, SetPos, SetVolume и перемешивание плейлиста из горутины обработчика. Команда уходит в `program.Send`, состояние плеера меняется в `Update` ([#9](https://github.com/lumpov/yamusic-tui/pull/9)).

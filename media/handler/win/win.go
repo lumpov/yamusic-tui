@@ -20,10 +20,12 @@ import (
 const _TIMELINE_POLL_PERIOD_MS = 400
 
 type WinHandler struct {
-	msgMux    sync.Mutex
-	msgChan   chan handler.Message
-	ansChan   chan any
-	closeChan chan bool
+	msgMux       sync.Mutex
+	closed       bool
+	msgChan      chan handler.Message
+	ansChan      chan any
+	closeChan    chan bool
+	timelineDone chan struct{}
 
 	mediaPlayer *playback.MediaPlayer
 	smtc        *media.SystemMediaTransportControls
@@ -39,10 +41,11 @@ type WinHandler struct {
 
 func NewHandler(name, description string) *WinHandler {
 	return &WinHandler{
-		msgChan:   make(chan handler.Message),
-		ansChan:   make(chan any),
-		closeChan: make(chan bool),
-		playState: PLAY_CLOSED,
+		msgChan:      make(chan handler.Message),
+		ansChan:      make(chan any),
+		closeChan:    make(chan bool),
+		timelineDone: make(chan struct{}),
+		playState:    PLAY_CLOSED,
 	}
 }
 
@@ -56,9 +59,13 @@ func (wh *WinHandler) Start(handler func() error) error {
 	err = handler()
 
 	close(wh.closeChan)
+	<-wh.timelineDone
+	wh.smtcDispose()
+	wh.msgMux.Lock()
+	wh.closed = true
 	close(wh.ansChan)
 	close(wh.msgChan)
-	wh.smtcDispose()
+	wh.msgMux.Unlock()
 
 	return err
 }
@@ -87,6 +94,10 @@ func (wh *WinHandler) OnPlayback() {
 	wh.setMetadata(filepath.Join(os.TempDir(), config.DirName, "metadata.mp3"))
 
 	wh.msgMux.Lock()
+	if wh.closed {
+		wh.msgMux.Unlock()
+		return
+	}
 	wh.msgChan <- handler.Message{
 		Type: handler.MSG_GET_METADATA,
 	}
@@ -114,6 +125,7 @@ func (wh *WinHandler) OnSeek(position time.Duration) {
 
 }
 func (wh *WinHandler) updateTimeline() {
+	defer close(wh.timelineDone)
 	periodTimer := time.NewTicker(_TIMELINE_POLL_PERIOD_MS * time.Millisecond)
 
 	for {
@@ -125,6 +137,11 @@ func (wh *WinHandler) updateTimeline() {
 		}
 
 		wh.msgMux.Lock()
+		if wh.closed {
+			wh.msgMux.Unlock()
+			periodTimer.Stop()
+			return
+		}
 		wh.msgChan <- handler.Message{
 			Type: handler.MSG_GET_POSITION,
 		}

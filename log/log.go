@@ -59,7 +59,10 @@ func Start() {
 		return
 	}
 
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, _FILE_PERM)
+	Stop()
+	_ = os.Remove(path)
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, _FILE_PERM)
 	if err != nil {
 		return
 	}
@@ -71,6 +74,9 @@ func Start() {
 }
 
 func Stop() {
+	if file == nil {
+		return
+	}
 	file.Close()
 	file = nil
 }

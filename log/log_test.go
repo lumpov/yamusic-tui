@@ -39,3 +39,36 @@ func TestStartCreatesOwnerOnlyLog(t *testing.T) {
 		t.Fatalf("log dir perm=%o, want %o", got, _DIR_PERM)
 	}
 }
+
+func TestStartDeletesPreviousLog(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	config.InitTest()
+
+	Start()
+	path := Location()
+	if path == "" {
+		t.Fatal("log path empty")
+	}
+	Print(LVL_INFO, "old session")
+	old, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(old) == 0 {
+		t.Fatal("first session must write")
+	}
+
+	Start()
+	defer Stop()
+	if Location() != path {
+		t.Fatalf("path changed: %s", Location())
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("previous log must be deleted, got %q", got)
+	}
+}

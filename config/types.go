@@ -137,6 +137,7 @@ type Config struct {
 	CacheDir       string    `yaml:"cache-dir"`
 	Proxy          string    `yaml:"proxy"`
 	SSLCerts       []string  `yaml:"ssl-certs"`
+	SentryDSN      string    `yaml:"sentry-dsn,omitempty"`
 	Search         *Search   `yaml:"search"`
 	Controls       *Controls `yaml:"controls"`
 	Style          *Style    `yaml:"style"`

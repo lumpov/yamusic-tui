@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/dece2183/yamusic-tui/telemetry"
 )
 
 const (
@@ -94,6 +96,7 @@ func proccessRequest[RetT any](req *http.Request) (result RetT, invInfo InvocInf
 
 		dec := json.NewDecoder(resp.Body)
 		if err = dec.Decode(&respBody); err != nil {
+			telemetry.CaptureAPI(err, req.Method, req.URL.Path, resp.StatusCode)
 			return
 		}
 
@@ -107,6 +110,7 @@ func proccessRequest[RetT any](req *http.Request) (result RetT, invInfo InvocInf
 
 		dec := json.NewDecoder(resp.Body)
 		if err = dec.Decode(&respBody); err != nil {
+			telemetry.CaptureAPI(err, req.Method, req.URL.Path, resp.StatusCode)
 			return
 		}
 
@@ -116,12 +120,20 @@ func proccessRequest[RetT any](req *http.Request) (result RetT, invInfo InvocInf
 		var respBody UnauthorizedError
 		dec := json.NewDecoder(resp.Body)
 		if err = dec.Decode(&respBody); err != nil {
+			telemetry.CaptureAPI(err, req.Method, req.URL.Path, resp.StatusCode)
 			return
 		}
 		err = respBody
 		invInfo.ReqId = respBody.RequestId
 	default:
 		err = &httpStatusError{Code: resp.StatusCode, Status: resp.Status}
+		if resp.StatusCode >= 500 {
+			path := ""
+			if req.URL != nil {
+				path = req.URL.Path
+			}
+			telemetry.CaptureAPI(err, req.Method, path, resp.StatusCode)
+		}
 	}
 
 	return
@@ -267,6 +279,7 @@ func Token(username, password string) (token string, err error) {
 	respBody := map[string]string{}
 	dec := json.NewDecoder(resp.Body)
 	if err = dec.Decode(&respBody); err != nil {
+		telemetry.CaptureAPI(err, http.MethodPost, "/token", resp.StatusCode)
 		return
 	}
 
@@ -279,6 +292,7 @@ func Token(username, password string) (token string, err error) {
 	token, ok = respBody["access_token"]
 	if !ok {
 		err = fmt.Errorf("unknown response format")
+		telemetry.CaptureAPI(err, http.MethodPost, "/token", resp.StatusCode)
 		return
 	}
 

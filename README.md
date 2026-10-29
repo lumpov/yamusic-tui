@@ -74,6 +74,7 @@ cache-tracks: likes # none/likes/all
 cache-dir: ""
 proxy: "" # proxy server URL; if not specified, uses the HTTP_PROXY and HTTPS_PROXY environment variables
 ssl-certs: [] # path to certificate files in PEM format
+sentry-dsn: "" # empty = Sentry off; panics and unexpected Yandex Music API errors only
 search:
     artists: true
     popular: false

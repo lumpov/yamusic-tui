@@ -8,6 +8,7 @@ import (
 	"github.com/dece2183/yamusic-tui/config"
 	"github.com/dece2183/yamusic-tui/log"
 	"github.com/dece2183/yamusic-tui/media"
+	"github.com/dece2183/yamusic-tui/telemetry"
 	"github.com/dece2183/yamusic-tui/ui/model"
 	loginpage "github.com/dece2183/yamusic-tui/ui/model/loginPage"
 	mainpage "github.com/dece2183/yamusic-tui/ui/model/mainPage"
@@ -44,6 +45,9 @@ func main() {
 
 	style.Apply(config.Current.Style)
 	api.SetupClient(config.Current.Proxy, certPool)
+	telemetry.Start()
+	defer telemetry.Stop()
+	defer telemetry.RecoverPanic()
 
 	if config.Current.Token == "" {
 		err = loginpage.New().Run()

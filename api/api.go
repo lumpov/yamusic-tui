@@ -672,11 +672,14 @@ func (client *YaMusicClient) TrackLyricsRequest(trackId string) (LRCLyrics []Lyr
 		}
 		lyrics, err = client.trackLyricsMeta(trackId, "TEXT")
 		if err != nil {
-			return []LyricPair{}, err
+			if statusCode(err) != http.StatusNotFound {
+				return []LyricPair{}, err
+			}
+			return client.trackSupplementLyrics(trackId)
 		}
 	}
 	if lyrics.DownloadUrl == "" {
-		return []LyricPair{}, errors.New("lyrics download url is empty")
+		return client.trackSupplementLyrics(trackId)
 	}
 	LRCLyricsResponse, err := httpClient.Get(lyrics.DownloadUrl)
 	if err != nil {
@@ -692,6 +695,28 @@ func (client *YaMusicClient) TrackLyricsRequest(trackId string) (LRCLyrics []Lyr
 	}
 	LRCLyrics = parseLRCText(string(data))
 	return
+}
+
+func (client *YaMusicClient) trackSupplementLyrics(trackId string) ([]LyricPair, error) {
+	sup, _, err := getRequest[TrackSupplement](client.token, fmt.Sprintf("/tracks/%s/supplement", trackId), nil)
+	if err != nil {
+		return []LyricPair{}, err
+	}
+	text := supplementLyricsText(sup)
+	if text == "" {
+		return []LyricPair{}, errors.New("supplement lyrics is empty")
+	}
+	return parseLRCText(text), nil
+}
+
+func supplementLyricsText(sup TrackSupplement) string {
+	if sup.Lyrics == nil {
+		return ""
+	}
+	if sup.Lyrics.FullLyrics != "" {
+		return sup.Lyrics.FullLyrics
+	}
+	return sup.Lyrics.Lyrics
 }
 
 func parseLRCText(lrcContent string) []LyricPair {

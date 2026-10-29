@@ -1,6 +1,9 @@
 package api
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestParseLRCTextSynced(t *testing.T) {
 	got := parseLRCText("[00:01.00]one\n[00:02.50]two\n")
@@ -25,5 +28,27 @@ func TestParseLRCTextPlainFallback(t *testing.T) {
 	}
 	if got[1].Line != "line b" {
 		t.Fatalf("second=%v", got[1])
+	}
+}
+
+func TestUnmarshalTrackSupplementFullLyrics(t *testing.T) {
+	var sup TrackSupplement
+	err := json.Unmarshal([]byte(`{"lyrics":{"id":1,"lyrics":"short","fullLyrics":"line a\nline b","hasRights":true,"showTranslation":false,"textLanguage":"en"}}`), &sup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := supplementLyricsText(sup)
+	if text != "line a\nline b" {
+		t.Fatalf("text=%q", text)
+	}
+	got := parseLRCText(text)
+	if len(got) != 2 || got[0].Line != "line a" || got[1].Line != "line b" {
+		t.Fatalf("parsed=%v", got)
+	}
+}
+
+func TestSupplementLyricsTextNil(t *testing.T) {
+	if got := supplementLyricsText(TrackSupplement{}); got != "" {
+		t.Fatalf("got=%q", got)
 	}
 }

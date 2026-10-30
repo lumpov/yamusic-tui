@@ -43,6 +43,7 @@ type Model struct {
 	isRenamePlaylistActive bool
 	isPlaylistHideOverride bool
 	uiFocused              bool
+	idleView               string
 
 	playQueue            []api.Track
 	playQueueTrackIndex  int
@@ -116,6 +117,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := message.(type) {
 	case tea.FocusMsg:
 		m.uiFocused = true
+		m.idleView = ""
 		if m.tracker != nil && !m.tracker.IsStoped() {
 			m.tracker, cmd = m.tracker.Update(tracker.ProgressControl(m.tracker.Progress()))
 			cmds = append(cmds, cmd)
@@ -123,6 +125,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	case tea.BlurMsg:
 		m.uiFocused = false
+		m.idleView = ""
 		return m, nil
 	case LoadingMsg:
 		m.isLoading = false
@@ -130,6 +133,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)
+		m.idleView = ""
 		return m, tea.ClearScreen
 
 	case tea.KeyMsg:
@@ -398,6 +402,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) View() string {
+	if !m.uiFocused && m.idleView != "" {
+		return m.idleView
+	}
 	var view string
 	switch {
 	case m.isLoading:
@@ -431,7 +438,9 @@ func (m *Model) View() string {
 	}
 
 	if !m.uiFocused {
-		return style.Dimmed(view)
+		view = style.Dimmed(view)
+		m.idleView = view
+		return view
 	}
 	return view
 }

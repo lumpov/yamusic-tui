@@ -17,6 +17,7 @@ type Model struct {
 	program       *tea.Program
 	width, height int
 	uiFocused     bool
+	idleView      string
 
 	input   textinput.Model
 	help    help.Model
@@ -78,12 +79,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.FocusMsg:
 		m.uiFocused = true
+		m.idleView = ""
 		return m, nil
 	case tea.BlurMsg:
 		m.uiFocused = false
+		m.idleView = ""
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)
+		m.idleView = ""
 		return m, tea.ClearScreen
 
 	case tea.KeyMsg:
@@ -115,6 +119,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) View() string {
+	if !m.uiFocused && m.idleView != "" {
+		return m.idleView
+	}
 	title := style.DialogTitleStyle.Render("Enter your token")
 	content := lipgloss.JoinVertical(lipgloss.Left, title, m.input.View())
 	content = style.DialogBoxStyle.Render(content)
@@ -127,7 +134,9 @@ func (m *Model) View() string {
 	)
 
 	if !m.uiFocused {
-		return style.Dimmed(dialog)
+		dialog = style.Dimmed(dialog)
+		m.idleView = dialog
+		return dialog
 	}
 	return dialog
 }

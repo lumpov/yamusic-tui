@@ -25,6 +25,10 @@ func TestLoginFocusToggle(t *testing.T) {
 	}
 
 	blurred := got.View()
+	got.width = 10
+	if got.View() != blurred {
+		t.Fatal("login blurred View must return idleView, not rebuild")
+	}
 	next, _ = got.Update(tea.FocusMsg{})
 	got = next.(*Model)
 	if !got.uiFocused {

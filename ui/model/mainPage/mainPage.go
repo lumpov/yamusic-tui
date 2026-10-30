@@ -326,17 +326,11 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.tracker.IsStoped() {
 				cmd = m.playSelected()
 				cmds = append(cmds, cmd)
-			} else {
-				m.mediaHandler.OnPlayPause()
 			}
-		case tracker.PAUSE:
-			m.mediaHandler.OnPlayPause()
 		case tracker.PLAYPAUSE:
 			if m.tracker.IsStoped() {
 				cmd = m.playSelected()
 				cmds = append(cmds, cmd)
-			} else {
-				m.mediaHandler.OnPlayPause()
 			}
 		case tracker.STOP:
 			m.mediaHandler.OnEnded()
@@ -358,6 +352,12 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.tracker, cmd = m.tracker.Update(message)
 		cmds = append(cmds, cmd)
 		m.indicateCurrentTrackPlaying(m.tracker.IsPlaying())
+		switch msg {
+		case tracker.PLAY, tracker.PAUSE, tracker.PLAYPAUSE:
+			if m.mediaHandler != nil && !m.tracker.IsStoped() {
+				m.mediaHandler.OnPlayPause(m.tracker.IsPlaying())
+			}
+		}
 
 	case tracker.SeekBy:
 		m.tracker, cmd = m.tracker.Update(message)

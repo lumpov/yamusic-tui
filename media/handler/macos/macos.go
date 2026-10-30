@@ -162,6 +162,18 @@ static void updateNowPlayingInfo(
     [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:info];
 }
 
+static void setNowPlayingPlaybackRate(int isPlaying) {
+    NSDictionary *current = [[MPNowPlayingInfoCenter defaultCenter] nowPlayingInfo];
+    NSMutableDictionary *info;
+    if (current != nil) {
+        info = [current mutableCopy];
+    } else {
+        info = [NSMutableDictionary dictionary];
+    }
+    info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? @(1.0) : @(0.0);
+    [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:info];
+}
+
 static void clearNowPlayingInfo(void) {
     [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:nil];
 }
@@ -276,7 +288,18 @@ func (mh *MacosHandler) OnPlayback(md handler.TrackMetadata) {
 	)
 }
 
-func (mh *MacosHandler) OnPlayPause() {
+func (mh *MacosHandler) OnPlayPause(playing bool) {
+	mh.msgMux.Lock()
+	closed := mh.closed
+	mh.msgMux.Unlock()
+	if closed {
+		return
+	}
+	rate := 0
+	if playing {
+		rate = 1
+	}
+	C.setNowPlayingPlaybackRate(C.int(rate))
 }
 
 func (mh *MacosHandler) OnSeek(position time.Duration) {

@@ -96,13 +96,12 @@ func (wh *WinHandler) OnPlayback(md handler.TrackMetadata) {
 	wh.updateTimeLineProperties(wh.trackDuration, 0)
 }
 
-func (wh *WinHandler) OnPlayPause() {
-	if wh.playState != PLAY_PLAYING {
+func (wh *WinHandler) OnPlayPause(playing bool) {
+	if playing {
 		wh.playState = PLAY_PLAYING
 	} else {
 		wh.playState = PLAY_PAUSED
 	}
-
 	wh.setState(wh.playState)
 }
 

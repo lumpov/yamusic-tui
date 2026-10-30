@@ -84,7 +84,7 @@ func (mh *MprisHandler) OnPlayback(handler.TrackMetadata) {
 	mh.evHandler.Player.OnPlayback()
 }
 
-func (mh *MprisHandler) OnPlayPause() {
+func (mh *MprisHandler) OnPlayPause(bool) {
 	mh.evHandler.Player.OnPlayPause()
 }
 

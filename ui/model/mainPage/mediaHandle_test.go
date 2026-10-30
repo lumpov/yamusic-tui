@@ -54,10 +54,17 @@ func TestMediaPlaybackMsgPlayPauseSeekVolume(t *testing.T) {
 
 type captureMedia struct {
 	stubMedia
-	ans any
+	ans         any
+	playPauseN  int
+	lastPlaying bool
 }
 
 func (c *captureMedia) SendAnswer(v any) { c.ans = v }
+
+func (c *captureMedia) OnPlayPause(playing bool) {
+	c.playPauseN++
+	c.lastPlaying = playing
+}
 
 func TestAnswerMediaGetOnUpdate(t *testing.T) {
 	config.InitTest(t)
@@ -83,5 +90,15 @@ func TestAnswerMediaGetOnUpdate(t *testing.T) {
 	md, ok := cap.ans.(handler.TrackMetadata)
 	if !ok || md.TrackId != "" {
 		t.Fatalf("stopped GET_METADATA: %+v", cap.ans)
+	}
+}
+
+func TestPauseDoesNotNotifyMediaWhenStopped(t *testing.T) {
+	m := pausedPlaylistModel(t)
+	cap := &captureMedia{}
+	m.mediaHandler = cap
+	_, _ = m.Update(tracker.PAUSE)
+	if cap.playPauseN != 0 {
+		t.Fatalf("stopped tracker must not call OnPlayPause, n=%d", cap.playPauseN)
 	}
 }

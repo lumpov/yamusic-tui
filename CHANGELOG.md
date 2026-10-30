@@ -25,6 +25,7 @@
 
 ### Исправлено
 
+- Darwin Touch Bar / Now Playing: `OnPlayPause` ставит `PlaybackRate` 1 или 0, не затирая название трека. `Update` сообщает состояние после Pause/Play ([#25](https://github.com/lumpov/yamusic-tui/pull/25)).
 - `GET_*` медиакнопок читают tracker в `Update`, а не из горутины `mediaHandle`. `OnPlayback` получает метаданные аргументом и не ждёт `ansChan` на потоке UI ([#25](https://github.com/lumpov/yamusic-tui/pull/25)).
 - Загрузка трека, поиск и догрузка ротора больше не вызывают HTTP из `Update`. Сеть идёт в `tea.Cmd`, `Update` применяет готовый результат ([#24](https://github.com/lumpov/yamusic-tui/pull/24)).
 - Darwin: колбэк `packetsProc` не ждёт свободный буфер AudioQueue. Pause останавливал колбэки, `waitFreeBuffer` не возвращался, перемотка и play/pause переставали слушаться. Пакеты копятся в списке, enqueue вне колбэка ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).

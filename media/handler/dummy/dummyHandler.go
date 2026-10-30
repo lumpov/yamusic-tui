@@ -39,7 +39,7 @@ func (*DummyHandler) OnVolume() {
 func (*DummyHandler) OnPlayback(handler.TrackMetadata) {
 }
 
-func (*DummyHandler) OnPlayPause() {
+func (*DummyHandler) OnPlayPause(bool) {
 }
 
 func (*DummyHandler) OnSeek(position time.Duration) {

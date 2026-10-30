@@ -197,6 +197,10 @@ func (wh *WinHandler) onButtonPressed(instance *foundation.TypedEventHandler, se
 	}
 
 	wh.msgMux.Lock()
+	if wh.closed {
+		wh.msgMux.Unlock()
+		return
+	}
 
 	switch button {
 	case media.SystemMediaTransportControlsButtonPlay:
@@ -234,6 +238,10 @@ func (wh *WinHandler) onPositionChanged(instance *foundation.TypedEventHandler, 
 	}
 
 	wh.msgMux.Lock()
+	if wh.closed {
+		wh.msgMux.Unlock()
+		return
+	}
 
 	wh.msgChan <- handler.Message{
 		Type: handler.MSG_SETPOS,

@@ -3,6 +3,7 @@
 package mpris
 
 import (
+	"sync"
 	"time"
 
 	"github.com/dece2183/yamusic-tui/media/handler"
@@ -16,6 +17,8 @@ type MprisHandler struct {
 	evHandler   *events.EventHandler
 	name        string
 	description string
+	mu          sync.Mutex
+	closed      bool
 	msgChan     chan handler.Message
 	ansChan     chan any
 }
@@ -41,10 +44,24 @@ func (mh *MprisHandler) Start(handler func() error) error {
 
 	mh.evHandler.Player.OnEnded()
 	mh.server.Stop()
+	mh.mu.Lock()
+	mh.closed = true
+	mh.mu.Unlock()
 	close(mh.msgChan)
 	close(mh.ansChan)
 
 	return err
+}
+
+func (mh *MprisHandler) send(msg handler.Message) {
+	defer func() { recover() }()
+	mh.mu.Lock()
+	if mh.closed {
+		mh.mu.Unlock()
+		return
+	}
+	mh.mu.Unlock()
+	mh.msgChan <- msg
 }
 
 func (mh *MprisHandler) Message() <-chan handler.Message {

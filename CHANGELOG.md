@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Добавлено
+
+- Sentry: DSN в `sentry-dsn` (`config.yaml`). Пустое значение — Sentry выключен. В issues уходят panic, `log.LVL_PANIC`, поломка JSON Yandex Music API и HTTP ≥ 500. INFO/WARN, 404 текстов, 400/401 не создают issue. Токен пишется как `02kdsjh...kjds8`. В событии: версия приложения, GOOS/GOARCH, Go, hostname, cache-tracks, lyrics, buffer, rewind ([#14](https://github.com/lumpov/yamusic-tui/pull/14)).
+
 ### Безопасность
 
 - Каталоги приложения (`~/.config/yamusic-tui`, кэш, `$TMPDIR/yamusic-tui`) приводятся к `0700`. Файлы лога, кэша MP3, обложки и metadata — к `0600`, в том числе если они уже существовали с `0755` ([#10](https://github.com/lumpov/yamusic-tui/pull/10)).

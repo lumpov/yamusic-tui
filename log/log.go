@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dece2183/yamusic-tui/config"
+	"github.com/dece2183/yamusic-tui/telemetry"
 )
 
 type Level int
@@ -82,6 +83,10 @@ func Stop() {
 }
 
 func Print(lvl Level, format string, args ...any) {
+	if lvl == LVL_PANIC {
+		telemetry.CaptureMessage(fmt.Sprintf(format, args...))
+	}
+
 	if file == nil {
 		return
 	}

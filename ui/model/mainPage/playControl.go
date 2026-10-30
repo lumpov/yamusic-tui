@@ -11,6 +11,7 @@ import (
 	_ "image/png"
 
 	"github.com/bogem/id3v2/v2"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dece2183/yamusic-tui/api"
 	"github.com/dece2183/yamusic-tui/cache"
 	"github.com/dece2183/yamusic-tui/log"
@@ -83,10 +84,10 @@ func (m *Model) rotateTracks(pl *playlist.Item) {
 	}
 }
 
-func (m *Model) prevTrack() {
+func (m *Model) prevTrack() tea.Cmd {
 	if len(m.playQueue) == 0 || m.playQueueTrackIndex == 0 {
 		m.Send(tracker.STOP)
-		return
+		return nil
 	}
 
 	m.playQueueTrackIndex--
@@ -115,16 +116,16 @@ func (m *Model) prevTrack() {
 	track := &m.playQueue[m.playQueueTrackIndex]
 	if !track.Available {
 		m.Send(tracker.STOP)
-		return
+		return nil
 	}
 
-	m.playTrack(track)
+	return m.playTrack(track)
 }
 
-func (m *Model) nextTrack() {
+func (m *Model) nextTrack() tea.Cmd {
 	if len(m.playQueue) == 0 {
 		m.Send(tracker.STOP)
-		return
+		return nil
 	}
 
 	m.playQueueTrackIndex++
@@ -157,21 +158,37 @@ func (m *Model) nextTrack() {
 	if m.playQueueTrackIndex >= len(m.playQueue) {
 		m.playQueueTrackIndex = 0
 		m.Send(tracker.STOP)
-		return
+		return nil
 	}
 
 	track := &m.playQueue[m.playQueueTrackIndex]
 	if !track.Available {
 		m.Send(tracker.STOP)
-		return
+		return nil
 	}
 
-	m.playTrack(track)
+	return m.playTrack(track)
 }
 
-func (m *Model) playTrack(track *api.Track) {
-	m.tracker.Stop()
+type playTrackReadyMsg struct {
+	gen       int
+	track     *api.Track
+	buffer    *stream.BufferedStream
+	lyrics    []api.LyricPair
+	fromCache bool
+	err       error
+}
 
+func (m *Model) playTrack(track *api.Track) tea.Cmd {
+	m.tracker.Stop()
+	m.playGen++
+	gen := m.playGen
+	return func() tea.Msg {
+		return m.loadPlayTrack(gen, track)
+	}
+}
+
+func (m *Model) loadPlayTrack(gen int, track *api.Track) playTrackReadyMsg {
 	var (
 		wg sync.WaitGroup
 
@@ -284,8 +301,7 @@ func (m *Model) playTrack(track *api.Track) {
 	wg.Wait()
 
 	if downloadErr != nil && trackReader == nil {
-		m.tracker.ShowError("track download")
-		return
+		return playTrackReadyMsg{gen: gen, track: track, err: downloadErr}
 	}
 
 	trackBuffer := stream.NewBufferedStream(trackReader, trackSize)
@@ -329,29 +345,52 @@ func (m *Model) playTrack(track *api.Track) {
 		log.Print(log.LVL_WARNIGN, "failed to create metadata file: %s", err)
 	}
 
-	if m.currentPlaylistIndex >= 0 {
-		currentPlaylist := m.playlists.Items()[m.currentPlaylistIndex]
-		if currentPlaylist.Rotor {
-			ev := api.NewTrackFeedbackEvent(api.EV_TRACK_STARTED, track, 0)
-			go m.client.RotorSessionFeedback(currentPlaylist.SessionId, api.NewFeedback(currentPlaylist.SessionBatch, ev))
-			log.Print(log.LVL_INFO, "feedback event sended: "+ev.Type+" track: "+track.Title)
-		}
-	}
-
-	m.tracker.StartTrack(track, trackBuffer, lyrics)
-	m.indicateCurrentTrackPlaying(true)
-	m.mediaHandler.OnPlayback()
-
-	if m.client != nil {
-		go m.client.PlayTrack(track, trackFromCache)
+	return playTrackReadyMsg{
+		gen:       gen,
+		track:     track,
+		buffer:    trackBuffer,
+		lyrics:    lyrics,
+		fromCache: trackFromCache,
 	}
 }
 
-func (m *Model) playSelectedPlaylist(trackIndex int) {
+func (m *Model) applyPlayTrack(msg playTrackReadyMsg) {
+	if msg.gen != m.playGen {
+		if msg.buffer != nil {
+			msg.buffer.Close()
+		}
+		return
+	}
+	if msg.err != nil || msg.buffer == nil {
+		m.tracker.ShowError("track download")
+		return
+	}
+
+	if m.currentPlaylistIndex >= 0 {
+		currentPlaylist := m.playlists.Items()[m.currentPlaylistIndex]
+		if currentPlaylist.Rotor && m.client != nil {
+			ev := api.NewTrackFeedbackEvent(api.EV_TRACK_STARTED, msg.track, 0)
+			go m.client.RotorSessionFeedback(currentPlaylist.SessionId, api.NewFeedback(currentPlaylist.SessionBatch, ev))
+			log.Print(log.LVL_INFO, "feedback event sended: "+ev.Type+" track: "+msg.track.Title)
+		}
+	}
+
+	m.tracker.StartTrack(msg.track, msg.buffer, msg.lyrics)
+	m.indicateCurrentTrackPlaying(true)
+	if m.mediaHandler != nil {
+		m.mediaHandler.OnPlayback()
+	}
+
+	if m.client != nil {
+		go m.client.PlayTrack(msg.track, msg.fromCache)
+	}
+}
+
+func (m *Model) playSelectedPlaylist(trackIndex int) tea.Cmd {
 	selectedPlaylist := m.playlists.SelectedItem()
 	if selectedPlaylist == nil || len(selectedPlaylist.Tracks) == 0 || selectedPlaylist.SelectedTrack < 0 || selectedPlaylist.SelectedTrack >= len(selectedPlaylist.Tracks) {
 		m.Send(tracker.STOP)
-		return
+		return nil
 	}
 
 	trackToPlay := &selectedPlaylist.Tracks[selectedPlaylist.SelectedTrack]
@@ -361,10 +400,10 @@ func (m *Model) playSelectedPlaylist(trackIndex int) {
 		if currentPlaylist.IsSame(selectedPlaylist) && selectedPlaylist.CurrentTrack == trackIndex && m.tracker.CurrentTrack().Id == trackToPlay.Id {
 			if m.tracker.IsPlaying() {
 				m.tracker.Pause()
-				return
+				return nil
 			} else {
 				m.tracker.Play()
-				return
+				return nil
 			}
 		}
 		if currentPlaylist.Rotor {
@@ -404,5 +443,5 @@ func (m *Model) playSelectedPlaylist(trackIndex int) {
 	m.playlists.SetItem(m.currentPlaylistIndex, selectedPlaylist)
 	m.playQueue = selectedPlaylist.Tracks
 	m.playQueueTrackIndex = trackIndex
-	m.playTrack(trackToPlay)
+	return m.playTrack(trackToPlay)
 }

@@ -284,8 +284,7 @@ func (m *Model) playSelected() tea.Cmd {
 	if m.albumListActive() {
 		return m.openAlbum(m.tracklist.Index())
 	}
-	m.playSelectedPlaylist(m.tracklist.Index())
-	return nil
+	return m.playSelectedPlaylist(m.tracklist.Index())
 }
 
 func (m *Model) openAlbum(index int) tea.Cmd {

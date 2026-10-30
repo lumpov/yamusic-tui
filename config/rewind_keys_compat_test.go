@@ -33,7 +33,7 @@ var bubbleteaArrowSeq = map[string]string{
 }
 
 func TestRewindKeysAreShiftArrows(t *testing.T) {
-	InitTest()
+	InitTest(t)
 
 	shiftRight := tea.KeyMsg{Type: tea.KeyShiftRight}.String()
 	if shiftRight != "shift+right" {
@@ -70,7 +70,7 @@ func TestRewindKeysAreShiftArrows(t *testing.T) {
 }
 
 func TestRewindTerminalSequences(t *testing.T) {
-	InitTest()
+	InitTest(t)
 
 	cases := []struct {
 		seq    string
@@ -127,7 +127,7 @@ func TestProbeShiftRightTerminal(t *testing.T) {
 		t.Skip("stdin не терминал")
 	}
 
-	InitTest()
+	InitTest(t)
 	restore, err := unixRawStdin()
 	if err != nil {
 		t.Fatal(err)

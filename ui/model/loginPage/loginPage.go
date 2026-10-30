@@ -1,6 +1,8 @@
 package loginpage
 
 import (
+	"strings"
+
 	"github.com/dece2183/yamusic-tui/config"
 	"github.com/dece2183/yamusic-tui/ui/style"
 
@@ -92,7 +94,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case controls.Quit.Contains(keypress):
 			return m, tea.Quit
 		case controls.Apply.Contains(keypress):
-			config.Current.Token = m.input.Value()
+			tok := strings.TrimSpace(m.input.Value())
+			if tok == "" {
+				return m, nil
+			}
+			config.Current.Token = tok
 			m.err = config.Save()
 			return m, tea.Quit
 		default:

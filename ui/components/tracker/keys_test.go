@@ -13,7 +13,7 @@ import (
 )
 
 func TestVolumeKeysAreBrackets(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	m := NewForTest()
 	m.volume = 0.5
 	m.volumeIncremet = 0.1
@@ -37,7 +37,7 @@ func TestVolumeKeysAreBrackets(t *testing.T) {
 }
 
 func TestPlusDoesNotChangeVolume(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	m := NewForTest()
 	m.volume = 0.5
 	before := m.volume
@@ -48,7 +48,7 @@ func TestPlusDoesNotChangeVolume(t *testing.T) {
 }
 
 func TestShiftRightRewindsCurrentTrack(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	fp := &fakePlayer{playing: true}
 	m := NewForTest()
 	m.player = fp

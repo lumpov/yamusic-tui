@@ -36,7 +36,7 @@ func TestDisplayPlaylistPinnedAlbumDoesNotPanic(t *testing.T) {
 }
 
 func TestShufflePlaylistCurrentTrackOutOfRange(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	likes := make(map[string]bool)
 	cache := make(map[string]bool)
 	playlists := playlist.New(nil)
@@ -66,7 +66,7 @@ func TestShufflePlaylistCurrentTrackOutOfRange(t *testing.T) {
 }
 
 func TestAlbumListActiveNilSelection(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	m := &Model{
 		playlists: playlist.New(nil),
 	}

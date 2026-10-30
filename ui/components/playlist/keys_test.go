@@ -8,7 +8,7 @@ import (
 )
 
 func TestPlusMinusMovePlaylistCursor(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 
 	m := New(nil)
 	_ = m.SetItems([]*Item{
@@ -35,7 +35,7 @@ func TestPlusMinusMovePlaylistCursor(t *testing.T) {
 }
 
 func TestCtrlUpIsNotPlaylistShortcut(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	m := New(nil)
 	_ = m.SetItems([]*Item{
 		{Name: "one", Kind: LIKES, Active: true},

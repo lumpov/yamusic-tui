@@ -10,7 +10,7 @@ import (
 )
 
 func TestDimmedStripsAccentAndAppliesInactiveColor(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	Apply(config.Current.Style)
 

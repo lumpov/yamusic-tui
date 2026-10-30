@@ -24,8 +24,9 @@ func TestMaskSecret(t *testing.T) {
 
 func TestRedactEventReplacesToken(t *testing.T) {
 	token := "02kdsjhABCDEFGkjds8"
+	prev := config.Current.Token
 	config.Current.Token = token
-	t.Cleanup(func() { config.Current.Token = "" })
+	t.Cleanup(func() { config.Current.Token = prev })
 
 	event := &sentry.Event{
 		Message:   "OAuth " + token + " failed",

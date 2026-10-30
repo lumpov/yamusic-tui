@@ -13,7 +13,7 @@ func TestTempMediaDirAndFilesAreOwnerOnly(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX file modes")
 	}
-	config.InitTest()
+	config.InitTest(t)
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp)
 	dir := filepath.Join(tmp, config.DirName)

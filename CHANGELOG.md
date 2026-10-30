@@ -13,6 +13,7 @@
 
 ### Безопасность
 
+- `config.Save` не записывает пустой токен поверх существующего в `config.yaml`. `InitTest` перед каждым тестом копирует оригинал в свой каталог: yaml плеера на машине запуска (`~/.config/yamusic-tui/config.yaml` на момент старта процесса), если файла нет — `config/testdata/config.yaml`. Экран входа не сохраняет пустую строку.
 - Каталоги приложения (`~/.config/yamusic-tui`, кэш, `$TMPDIR/yamusic-tui`) приводятся к `0700`. Файлы лога, кэша MP3, обложки и metadata — к `0600`, в том числе если они уже существовали с `0755` ([#10](https://github.com/lumpov/yamusic-tui/pull/10)).
 - При старте предыдущий `$TMPDIR/yamusic-tui/yamusic-tui.log` удаляется, создаётся новый файл ([#10](https://github.com/lumpov/yamusic-tui/pull/10)).
 

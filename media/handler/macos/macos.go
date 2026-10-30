@@ -249,25 +249,17 @@ func (mh *MacosHandler) OnEnded() {
 func (mh *MacosHandler) OnVolume() {
 }
 
-func (mh *MacosHandler) OnPlayback() {
+func (mh *MacosHandler) OnPlayback(md handler.TrackMetadata) {
 	mh.msgMux.Lock()
-	if mh.closed {
-		mh.msgMux.Unlock()
-		return
-	}
-	mh.msgChan <- handler.Message{
-		Type: handler.MSG_GET_METADATA,
-	}
-	metadata, ok := (<-mh.ansChan).(handler.TrackMetadata)
+	closed := mh.closed
 	mh.msgMux.Unlock()
-
-	if !ok {
+	if closed {
 		return
 	}
 
-	title := metadata.Title
-	artist := strings.Join(metadata.Artists, ", ")
-	album := metadata.AlbumName
+	title := md.Title
+	artist := strings.Join(md.Artists, ", ")
+	album := md.AlbumName
 
 	cTitle := C.CString(title)
 	defer C.free(unsafe.Pointer(cTitle))
@@ -278,7 +270,7 @@ func (mh *MacosHandler) OnPlayback() {
 
 	C.updateNowPlayingInfo(
 		cTitle, cArtist, cAlbum,
-		C.double(metadata.Length.Seconds()),
+		C.double(md.Length.Seconds()),
 		C.double(0),
 		C.int(1),
 	)

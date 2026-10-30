@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dece2183/yamusic-tui/config"
 	"github.com/dece2183/yamusic-tui/media/handler"
 	"github.com/dece2183/yamusic-tui/ui/components/tracker"
 )
@@ -48,5 +49,39 @@ func TestMediaPlaybackMsgPlayPauseSeekVolume(t *testing.T) {
 	}
 	if got := mediaPlaybackMsg(handler.Message{Type: handler.MSG_GET_VOLUME}); got != nil {
 		t.Fatalf("GET must not map to a playback message, got %v", got)
+	}
+}
+
+type captureMedia struct {
+	stubMedia
+	ans any
+}
+
+func (c *captureMedia) SendAnswer(v any) { c.ans = v }
+
+func TestAnswerMediaGetOnUpdate(t *testing.T) {
+	config.InitTest(t)
+	likes := map[string]bool{}
+	cap := &captureMedia{}
+	m := &Model{
+		tracker:      tracker.New(nil, &likes),
+		mediaHandler: cap,
+		uiFocused:    true,
+	}
+
+	next, _ := m.Update(handler.Message{Type: handler.MSG_GET_PLAYBACKSTATUS})
+	got := next.(*Model)
+	if cap.ans != handler.STATE_STOPED {
+		t.Fatalf("GET_PLAYBACKSTATUS: got %v", cap.ans)
+	}
+	next, _ = got.Update(handler.Message{Type: handler.MSG_GET_VOLUME})
+	got = next.(*Model)
+	if _, ok := cap.ans.(float64); !ok {
+		t.Fatalf("GET_VOLUME type %T", cap.ans)
+	}
+	_, _ = got.Update(handler.Message{Type: handler.MSG_GET_METADATA})
+	md, ok := cap.ans.(handler.TrackMetadata)
+	if !ok || md.TrackId != "" {
+		t.Fatalf("stopped GET_METADATA: %+v", cap.ans)
 	}
 }

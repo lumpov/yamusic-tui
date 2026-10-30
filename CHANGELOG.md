@@ -25,6 +25,7 @@
 
 ### Исправлено
 
+- `GET_*` медиакнопок читают tracker в `Update`, а не из горутины `mediaHandle`. `OnPlayback` получает метаданные аргументом и не ждёт `ansChan` на потоке UI.
 - Загрузка трека, поиск и догрузка ротора больше не вызывают HTTP из `Update`. Сеть идёт в `tea.Cmd`, `Update` применяет готовый результат ([#24](https://github.com/lumpov/yamusic-tui/pull/24)).
 - Darwin: колбэк `packetsProc` не ждёт свободный буфер AudioQueue. Pause останавливал колбэки, `waitFreeBuffer` не возвращался, перемотка и play/pause переставали слушаться. Пакеты копятся в списке, enqueue вне колбэка ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
 - `io.EOF` после полного буфера не пишется в `lastError`: Stop не показывает `track buffering` ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).

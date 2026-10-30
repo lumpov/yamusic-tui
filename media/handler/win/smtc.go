@@ -86,7 +86,7 @@ func (wh *WinHandler) initSmtc() error {
 }
 
 func (wh *WinHandler) smtcDispose() error {
-	wh.smtc.RemoveButtonPressed(wh.positionChangedToken)
+	wh.smtc.RemovePlaybackPositionChangeRequested(wh.positionChangedToken)
 	wh.smtc.RemoveButtonPressed(wh.buttonPressedToken)
 	wh.positionChangedEvent.Release()
 	wh.buttonPressedEvent.Release()

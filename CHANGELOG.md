@@ -24,6 +24,7 @@
 
 ### Исправлено
 
+- Windows SMTC: токен `PlaybackPositionChangeRequested` снимается `RemovePlaybackPositionChangeRequested`, а не `RemoveButtonPressed`.
 - Иконка Play в списке треков берёт `tracker.IsPlaying()`: движение по плейлистам и Back больше не включают её на паузе. Pause/Play обновляют иконку сразу.
 - Без фокуса окна `View` не пересобирает списки: отдаёт снимок `idleView`. Bubble Tea после каждого `Update` всегда рисует кадр; `skipUIProgress` закрывал только прогресс, а `volumeFadeTickMsg` и прочие сообщения всё равно собирали lipgloss. `volumeFader` шлёт тик только пока громкость не на цели.
 - Перемотка выравнивает байтовый offset вниз на границу PCM-сэмпла (4 байта, s16le stereo). Было `offset += offset % 4` (1→2, 3→6, не кратно 4) ([#17](https://github.com/lumpov/yamusic-tui/pull/17)).

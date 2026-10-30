@@ -9,13 +9,22 @@ package tracker
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <time.h>
 
 #define AQ_NUM_BUFFERS 3
 #define AQ_BUFFER_SIZE 32768
 #define AQ_MAX_PACKETS 512
 
 extern void goAQStopped(uintptr_t handle);
+extern void goAQRunning(uintptr_t handle, int running);
+
+typedef struct PendingPkt PendingPkt;
+struct PendingPkt {
+	PendingPkt *next;
+	UInt32 numBytes;
+	UInt32 numPackets;
+	AudioStreamPacketDescription descs[AQ_MAX_PACKETS];
+	unsigned char data[];
+};
 
 typedef struct {
 	uintptr_t goHandle;
@@ -23,6 +32,8 @@ typedef struct {
 	AudioQueueRef queue;
 	AudioQueueBufferRef buffers[AQ_NUM_BUFFERS];
 	int bufferInUse[AQ_NUM_BUFFERS];
+	PendingPkt *pendingHead;
+	PendingPkt *pendingTail;
 	pthread_mutex_t mu;
 	pthread_cond_t cv;
 	int closed;
@@ -57,75 +68,93 @@ static void runningListener(void *ud, AudioQueueRef q, AudioQueuePropertyID id) 
 	pthread_mutex_lock(&p->mu);
 	finishing = p->finishing;
 	pthread_mutex_unlock(&p->mu);
+	goAQRunning(p->goHandle, running ? 1 : 0);
 	if (running == 0 && finishing) {
 		goAQStopped(p->goHandle);
 	}
 }
 
-static int waitFreeBuffer(AQPlayer *p, int epoch) {
-	pthread_mutex_lock(&p->mu);
-	while (!p->closed && p->seekEpoch == epoch) {
-		for (int i = 0; i < AQ_NUM_BUFFERS; i++) {
-			if (!p->bufferInUse[i] && p->buffers[i] != NULL) {
-				int idx = i;
-				pthread_mutex_unlock(&p->mu);
-				return idx;
-			}
-		}
-		struct timespec ts;
-		clock_gettime(CLOCK_REALTIME, &ts);
-		ts.tv_nsec += 50000000;
-		if (ts.tv_nsec >= 1000000000L) {
-			ts.tv_sec += 1;
-			ts.tv_nsec -= 1000000000L;
-		}
-		pthread_cond_timedwait(&p->cv, &p->mu, &ts);
+static void discardPendingLocked(AQPlayer *p) {
+	PendingPkt *cur = p->pendingHead;
+	p->pendingHead = NULL;
+	p->pendingTail = NULL;
+	while (cur != NULL) {
+		PendingPkt *next = cur->next;
+		free(cur);
+		cur = next;
 	}
-	pthread_mutex_unlock(&p->mu);
-	return -1;
 }
 
 static void packetsProc(void *ud, UInt32 numBytes, UInt32 numPackets, const void *data, AudioStreamPacketDescription *desc) {
 	AQPlayer *p = (AQPlayer *)ud;
-	if (p->queue == NULL || numBytes == 0) {
+	if (numBytes == 0 || data == NULL) {
 		return;
 	}
-	pthread_mutex_lock(&p->mu);
-	int epoch = p->seekEpoch;
-	pthread_mutex_unlock(&p->mu);
-	int idx = waitFreeBuffer(p, epoch);
-	if (idx < 0) {
+	if (numBytes > AQ_BUFFER_SIZE) {
+		numBytes = AQ_BUFFER_SIZE;
+	}
+	PendingPkt *pkt = (PendingPkt *)malloc(sizeof(PendingPkt) + numBytes);
+	if (pkt == NULL) {
 		return;
 	}
-	pthread_mutex_lock(&p->mu);
-	if (p->seekEpoch != epoch || p->closed) {
-		pthread_mutex_unlock(&p->mu);
-		return;
-	}
-	pthread_mutex_unlock(&p->mu);
-
-	AudioQueueBufferRef buf = p->buffers[idx];
-	if (numBytes > buf->mAudioDataBytesCapacity) {
-		numBytes = buf->mAudioDataBytesCapacity;
-	}
-	memcpy(buf->mAudioData, data, numBytes);
-	buf->mAudioDataByteSize = numBytes;
-	if (desc && numPackets > 0) {
+	pkt->next = NULL;
+	pkt->numBytes = numBytes;
+	pkt->numPackets = 0;
+	memcpy(pkt->data, data, numBytes);
+	if (desc != NULL && numPackets > 0) {
 		UInt32 n = numPackets;
-		if (n > buf->mPacketDescriptionCapacity) {
-			n = buf->mPacketDescriptionCapacity;
+		if (n > AQ_MAX_PACKETS) {
+			n = AQ_MAX_PACKETS;
 		}
-		memcpy(buf->mPacketDescriptions, desc, n * sizeof(AudioStreamPacketDescription));
-		buf->mPacketDescriptionCount = n;
-	} else {
-		buf->mPacketDescriptionCount = 0;
+		memcpy(pkt->descs, desc, n * sizeof(AudioStreamPacketDescription));
+		pkt->numPackets = n;
 	}
-
 	pthread_mutex_lock(&p->mu);
-	if (p->seekEpoch != epoch || p->closed) {
+	if (p->closed) {
 		pthread_mutex_unlock(&p->mu);
+		free(pkt);
 		return;
 	}
+	if (p->pendingTail != NULL) {
+		p->pendingTail->next = pkt;
+	} else {
+		p->pendingHead = pkt;
+	}
+	p->pendingTail = pkt;
+	pthread_mutex_unlock(&p->mu);
+}
+
+static int aqEnqueuePending(AQPlayer *p) {
+	if (p == NULL) {
+		return 0;
+	}
+	pthread_mutex_lock(&p->mu);
+	if (p->closed || p->pendingHead == NULL) {
+		pthread_mutex_unlock(&p->mu);
+		return 0;
+	}
+	if (p->queue == NULL) {
+		pthread_mutex_unlock(&p->mu);
+		return -1;
+	}
+	int idx = -1;
+	for (int i = 0; i < AQ_NUM_BUFFERS; i++) {
+		if (!p->bufferInUse[i] && p->buffers[i] != NULL) {
+			idx = i;
+			break;
+		}
+	}
+	if (idx < 0) {
+		pthread_mutex_unlock(&p->mu);
+		return -1;
+	}
+	PendingPkt *pkt = p->pendingHead;
+	p->pendingHead = pkt->next;
+	if (p->pendingHead == NULL) {
+		p->pendingTail = NULL;
+	}
+	AudioQueueBufferRef buf = p->buffers[idx];
+	AudioQueueRef q = p->queue;
 	p->bufferInUse[idx] = 1;
 	int wantStart = p->wantPlay && !p->started && !p->closed;
 	if (wantStart) {
@@ -133,14 +162,30 @@ static void packetsProc(void *ud, UInt32 numBytes, UInt32 numPackets, const void
 	}
 	pthread_mutex_unlock(&p->mu);
 
-	if (buf->mPacketDescriptionCount > 0) {
-		AudioQueueEnqueueBuffer(p->queue, buf, buf->mPacketDescriptionCount, buf->mPacketDescriptions);
+	UInt32 numBytes = pkt->numBytes;
+	if (numBytes > buf->mAudioDataBytesCapacity) {
+		numBytes = buf->mAudioDataBytesCapacity;
+	}
+	memcpy(buf->mAudioData, pkt->data, numBytes);
+	buf->mAudioDataByteSize = numBytes;
+	if (pkt->numPackets > 0) {
+		UInt32 n = pkt->numPackets;
+		if (n > buf->mPacketDescriptionCapacity) {
+			n = buf->mPacketDescriptionCapacity;
+		}
+		memcpy(buf->mPacketDescriptions, pkt->descs, n * sizeof(AudioStreamPacketDescription));
+		buf->mPacketDescriptionCount = n;
+		AudioQueueEnqueueBuffer(q, buf, n, buf->mPacketDescriptions);
 	} else {
-		AudioQueueEnqueueBuffer(p->queue, buf, 0, NULL);
+		buf->mPacketDescriptionCount = 0;
+		AudioQueueEnqueueBuffer(q, buf, 0, NULL);
 	}
+	free(pkt);
 	if (wantStart) {
-		AudioQueueStart(p->queue, NULL);
+		AudioQueueStart(q, NULL);
+		return 2;
 	}
+	return 1;
 }
 
 static void propertyListener(void *ud, AudioFileStreamID stream, AudioFileStreamPropertyID prop, UInt32 *flags) {
@@ -296,6 +341,7 @@ static void aqSeekBegin(AQPlayer *p) {
 	for (int i = 0; i < AQ_NUM_BUFFERS; i++) {
 		p->bufferInUse[i] = 0;
 	}
+	discardPendingLocked(p);
 	AudioQueueRef q = p->queue;
 	pthread_cond_broadcast(&p->cv);
 	pthread_mutex_unlock(&p->mu);
@@ -337,6 +383,7 @@ static void aqDestroy(AQPlayer *p) {
 	pthread_mutex_lock(&p->mu);
 	p->closed = 1;
 	p->wantPlay = 0;
+	discardPendingLocked(p);
 	AudioQueueRef q = p->queue;
 	AudioFileStreamID stream = p->stream;
 	p->queue = NULL;
@@ -366,6 +413,7 @@ import (
 	"unsafe"
 
 	"github.com/dece2183/yamusic-tui/log"
+	"github.com/dece2183/yamusic-tui/playbacktrace"
 )
 
 var _ audioPlayer = (*darwinPlayer)(nil)
@@ -422,8 +470,12 @@ func (p *darwinPlayer) Play() {
 	}
 	p.paused = false
 	p.playing = true
+	feeding := p.feeding
 	p.mu.Unlock()
+	playbacktrace.Event("darwin.play feeding=%v", feeding)
+	t0 := time.Now()
 	C.aqPlay(p.c)
+	playbacktrace.Event("darwin.play aq wait_ms=%d", time.Since(t0).Milliseconds())
 	p.startFeed()
 }
 
@@ -434,8 +486,13 @@ func (p *darwinPlayer) Pause() {
 		return
 	}
 	p.paused = true
+	feeding := p.feeding
+	playing := p.playing
 	p.mu.Unlock()
+	playbacktrace.Event("darwin.pause feeding=%v playing=%v", feeding, playing)
+	t0 := time.Now()
 	C.aqPause(p.c)
+	playbacktrace.Event("darwin.pause aq wait_ms=%d", time.Since(t0).Milliseconds())
 }
 
 func (p *darwinPlayer) Close() error {
@@ -450,20 +507,26 @@ func (p *darwinPlayer) Close() error {
 	close(p.stopCh)
 	c := p.c
 	done := p.feedDone
+	feeding := p.feeding
 	p.mu.Unlock()
 
+	playbacktrace.Event("darwin.close abort feeding=%v", feeding)
 	if c != nil {
 		C.aqAbort(c)
 	}
 	if done != nil {
+		t0 := time.Now()
 		<-done
+		playbacktrace.Event("darwin.close feed-done wait_ms=%d", time.Since(t0).Milliseconds())
 	}
 
 	p.mu.Lock()
 	p.c = nil
 	p.mu.Unlock()
 	if c != nil {
+		t0 := time.Now()
 		C.aqDestroy(c)
+		playbacktrace.Event("darwin.close destroy wait_ms=%d", time.Since(t0).Milliseconds())
 	}
 	darwinPlayers.Delete(uintptr(p.handle))
 	p.handle.Delete()
@@ -494,25 +557,41 @@ func (p *darwinPlayer) Volume() float64 {
 }
 
 func (p *darwinPlayer) Seek(offset int64, whence int) (int64, error) {
+	p.mu.Lock()
+	feeding := p.feeding
+	paused := p.paused
+	playing := p.playing
+	p.mu.Unlock()
+	playbacktrace.Event("darwin.seek in offset=%d whence=%d feeding=%v paused=%v playing=%v", offset, whence, feeding, paused, playing)
+	t0 := time.Now()
 	p.ioMu.Lock()
+	playbacktrace.Event("darwin.seek ioMu wait_ms=%d", time.Since(t0).Milliseconds())
 	if p.src == nil {
 		p.ioMu.Unlock()
+		playbacktrace.Event("darwin.seek out src=nil")
 		return 0, io.EOF
 	}
+	t0 = time.Now()
 	pos, err := p.src.Seek(offset, whence)
+	playbacktrace.Event("darwin.seek src wait_ms=%d pos=%d err=%v", time.Since(t0).Milliseconds(), pos, err)
 	p.mu.Lock()
 	p.eofFinished = false
 	p.eofLogged = false
 	p.mu.Unlock()
-	if p.c != nil {
-		C.aqSeekBegin(p.c)
-	}
 	p.ioMu.Unlock()
+	t0 = time.Now()
 	p.parseMu.Lock()
+	playbacktrace.Event("darwin.seek parseMu wait_ms=%d", time.Since(t0).Milliseconds())
 	if p.c != nil {
+		t0 = time.Now()
+		C.aqSeekBegin(p.c)
+		playbacktrace.Event("darwin.seek aqBegin wait_ms=%d", time.Since(t0).Milliseconds())
+		t0 = time.Now()
 		C.aqSeekFinish(p.c)
+		playbacktrace.Event("darwin.seek aqFinish wait_ms=%d", time.Since(t0).Milliseconds())
 	}
 	p.parseMu.Unlock()
+	playbacktrace.Event("darwin.seek out pos=%d err=%v", pos, err)
 	return pos, err
 }
 
@@ -543,8 +622,67 @@ func (p *darwinPlayer) IsPlaying() bool {
 	return p.playing && !p.paused
 }
 
+func (p *darwinPlayer) enqueuePending() {
+	var waitStart time.Time
+	loops := 0
+	for {
+		select {
+		case <-p.stopCh:
+			return
+		default:
+		}
+		p.mu.Lock()
+		closed := p.closed
+		paused := p.paused
+		c := p.c
+		p.mu.Unlock()
+		if closed || c == nil {
+			return
+		}
+		t0 := time.Now()
+		p.parseMu.Lock()
+		parseWait := time.Since(t0)
+		n := int(C.aqEnqueuePending(c))
+		p.parseMu.Unlock()
+		if parseWait > 20*time.Millisecond {
+			playbacktrace.Event("darwin.enqueue parseMu wait_ms=%d n=%d", parseWait.Milliseconds(), n)
+		}
+		if n == 0 {
+			if !waitStart.IsZero() {
+				playbacktrace.Event("darwin.enqueue wait-end wait_ms=%d loops=%d n=0", time.Since(waitStart).Milliseconds(), loops)
+			}
+			return
+		}
+		if n < 0 {
+			if paused {
+				if !waitStart.IsZero() {
+					playbacktrace.Event("darwin.enqueue wait-abort paused wait_ms=%d loops=%d", time.Since(waitStart).Milliseconds(), loops)
+				}
+				return
+			}
+			if waitStart.IsZero() {
+				waitStart = time.Now()
+				playbacktrace.Event("darwin.enqueue wait-start")
+			}
+			loops++
+			time.Sleep(5 * time.Millisecond)
+			continue
+		}
+		if !waitStart.IsZero() {
+			playbacktrace.Event("darwin.enqueue wait-end wait_ms=%d loops=%d n=%d", time.Since(waitStart).Milliseconds(), loops, n)
+			waitStart = time.Time{}
+			loops = 0
+		}
+		if n == 2 {
+			playbacktrace.Event("darwin.aq AudioQueueStart")
+		}
+	}
+}
+
 func (p *darwinPlayer) feed() {
 	buf := make([]byte, 16*1024)
+	wasPaused := false
+	ackRead := false
 	for {
 		select {
 		case <-p.stopCh:
@@ -560,17 +698,30 @@ func (p *darwinPlayer) feed() {
 			return
 		}
 		if paused {
+			wasPaused = true
 			time.Sleep(20 * time.Millisecond)
 			continue
 		}
+		if wasPaused {
+			playbacktrace.Event("darwin.feed resume")
+			wasPaused = false
+			ackRead = true
+		}
+
+		p.enqueuePending()
 
 		p.ioMu.Lock()
 		n, err := p.src.Read(buf)
 		p.ioMu.Unlock()
+		if n > 0 && ackRead {
+			playbacktrace.Event("darwin.feed read n=%d", n)
+			ackRead = false
+		}
 		if n > 0 && p.c != nil {
 			p.parseMu.Lock()
 			C.aqParse(p.c, unsafe.Pointer(&buf[0]), C.uint32_t(n))
 			p.parseMu.Unlock()
+			p.enqueuePending()
 		}
 
 		if err == io.EOF {
@@ -583,6 +734,7 @@ func (p *darwinPlayer) feed() {
 				p.eofLogged = true
 				p.mu.Unlock()
 				log.Print(log.LVL_INFO, "darwin feed EOF progress=%.4f", progress)
+				playbacktrace.Event("darwin.feed EOF progress=%.4f", progress)
 				p.mu.Lock()
 			}
 			finish := progress >= 0.99 && !p.eofFinished
@@ -604,6 +756,12 @@ func (p *darwinPlayer) feed() {
 			time.Sleep(20 * time.Millisecond)
 		}
 	}
+}
+
+//export goAQRunning
+func goAQRunning(handle C.uintptr_t, running C.int) {
+	playbacktrace.Event("darwin.aq running=%d", int(running))
+	_ = handle
 }
 
 //export goAQStopped

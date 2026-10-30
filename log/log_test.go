@@ -72,3 +72,20 @@ func TestStartDeletesPreviousLog(t *testing.T) {
 		t.Fatalf("previous log must be deleted, got %q", got)
 	}
 }
+
+func TestDumpWritesBlock(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	config.InitTest(t)
+
+	Start()
+	defer Stop()
+	Dump("playbacktrace reason=stop n=1\n+0.000 rewind\n")
+	got, err := os.ReadFile(Location())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "playbacktrace reason=stop n=1\n+0.000 rewind\n" {
+		t.Fatalf("got=%q", got)
+	}
+}

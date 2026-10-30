@@ -120,6 +120,30 @@ func TestPlayPauseStopUseAudioPlayer(t *testing.T) {
 	}
 }
 
+func TestStopDoesNotShowCompleteBufferAsError(t *testing.T) {
+	config.InitTest(t)
+	data := []byte("hello-buffer")
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(data)), int64(len(data)))
+	defer buf.Close()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if buf.IsBuffered() && buf.Error() == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if buf.Error() != nil {
+		t.Fatalf("Error=%v", buf.Error())
+	}
+	m := NewForTest()
+	m.player = &fakePlayer{playing: true}
+	m.trackWrapper = &readWrapper{trackBuffer: buf}
+	m.Stop()
+	if m.showError {
+		t.Fatalf("showError text=%q", m.errorText)
+	}
+}
+
 func TestRewindSeeksCompressedOffset(t *testing.T) {
 	config.InitTest(t)
 	fp := &fakePlayer{playing: true}

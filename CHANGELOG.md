@@ -9,6 +9,7 @@
 
 ### Добавлено
 
+- `playbacktrace`: события воспроизведения в памяти, сброс в `$TMPDIR/yamusic-tui/yamusic-tui.log` при смене трека и выходе ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
 - Sentry: DSN в `sentry-dsn` (`config.yaml`). Пустое значение — Sentry выключен. В issues уходят panic, `log.LVL_PANIC`, поломка JSON Yandex Music API и HTTP ≥ 500. INFO/WARN, 404 текстов, 400/401 не создают issue. Токен пишется как `02kdsjh...kjds8`. В событии: версия приложения, GOOS/GOARCH, Go, hostname, cache-tracks, lyrics, buffer, rewind ([#14](https://github.com/lumpov/yamusic-tui/pull/14)).
 
 ### Безопасность
@@ -24,6 +25,11 @@
 
 ### Исправлено
 
+- Darwin: колбэк `packetsProc` не ждёт свободный буфер AudioQueue. Pause останавливал колбэки, `waitFreeBuffer` не возвращался, перемотка и play/pause переставали слушаться. Пакеты копятся в списке, enqueue вне колбэка ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
+- `io.EOF` после полного буфера не пишется в `lastError`: Stop не показывает `track buffering` ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
+- TEXT без меток времени снова идёт по прогрессу трека, без `No lyrics timestamps for this track` ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
+- `log.Start` оставляет файл лога, если `Chmod` не удался ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
+- `BufferedStream` не держит `mux` на время `Read`/`ReadFull` сети: Stop из `Update` не ждёт HTTP. Копирование в буфер — под замком ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
 - Windows SMTC: токен `PlaybackPositionChangeRequested` снимается `RemovePlaybackPositionChangeRequested`, а не `RemoveButtonPressed`.
 - Иконка Play в списке треков берёт `tracker.IsPlaying()`: движение по плейлистам и Back больше не включают её на паузе. Pause/Play обновляют иконку сразу.
 - Без фокуса окна `View` не пересобирает списки: отдаёт снимок `idleView`. Bubble Tea после каждого `Update` всегда рисует кадр; `skipUIProgress` закрывал только прогресс, а `volumeFadeTickMsg` и прочие сообщения всё равно собирали lipgloss. `volumeFader` шлёт тик только пока громкость не на цели.

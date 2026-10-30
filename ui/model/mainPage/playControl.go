@@ -14,6 +14,7 @@ import (
 	"github.com/dece2183/yamusic-tui/api"
 	"github.com/dece2183/yamusic-tui/cache"
 	"github.com/dece2183/yamusic-tui/log"
+	"github.com/dece2183/yamusic-tui/playbacktrace"
 	"github.com/dece2183/yamusic-tui/stream"
 	"github.com/dece2183/yamusic-tui/ui/components/playlist"
 	"github.com/dece2183/yamusic-tui/ui/components/tracker"
@@ -284,6 +285,9 @@ func (m *Model) playTrack(track *api.Track) {
 	wg.Wait()
 
 	if downloadErr != nil && trackReader == nil {
+		playbacktrace.Begin(track.Id, track.Title)
+		playbacktrace.Event("load fail err=%v", downloadErr)
+		playbacktrace.Flush("download-fail")
 		m.tracker.ShowError("track download")
 		return
 	}
@@ -339,6 +343,7 @@ func (m *Model) playTrack(track *api.Track) {
 	}
 
 	m.tracker.StartTrack(track, trackBuffer, lyrics)
+	playbacktrace.Event("load cache=%v size=%d", trackFromCache, trackSize)
 	m.indicateCurrentTrackPlaying(true)
 	m.mediaHandler.OnPlayback()
 

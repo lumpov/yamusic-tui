@@ -5,6 +5,8 @@ import (
 	"io"
 	"sync"
 	"time"
+
+	"github.com/dece2183/yamusic-tui/playbacktrace"
 )
 
 type TimeLimitedReader struct {
@@ -28,13 +30,21 @@ func NewTimeLimitedReader(r io.ReadCloser, ctx context.Context, ctxCancel contex
 func (r *TimeLimitedReader) Read(dest []byte) (int, error) {
 	r.mu.Lock()
 	if r.timer == nil {
-		r.timer = time.AfterFunc(r.timeout, r.cancel)
+		r.timer = time.AfterFunc(r.timeout, func() {
+			playbacktrace.Event("http idle-cancel timeout=%s", r.timeout)
+			r.cancel()
+		})
 	} else {
 		r.timer.Stop()
 		r.timer.Reset(r.timeout)
 	}
 	r.mu.Unlock()
-	return r.body.Read(dest)
+	t0 := time.Now()
+	n, err := r.body.Read(dest)
+	if d := time.Since(t0); d > 400*time.Millisecond {
+		playbacktrace.Event("http read wait_ms=%d n=%d err=%v", d.Milliseconds(), n, err)
+	}
+	return n, err
 }
 
 func (r *TimeLimitedReader) Close() error {

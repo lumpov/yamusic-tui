@@ -77,6 +77,90 @@ func TestSeekEndCloseClosesSource(t *testing.T) {
 	}
 }
 
+type blockingCloser struct {
+	readStarted chan struct{}
+	unblock     chan struct{}
+	mu          sync.Mutex
+	closed      int
+}
+
+func (b *blockingCloser) Read(p []byte) (int, error) {
+	select {
+	case <-b.readStarted:
+	default:
+		close(b.readStarted)
+	}
+	<-b.unblock
+	return 0, io.EOF
+}
+
+func (b *blockingCloser) Close() error {
+	b.mu.Lock()
+	b.closed++
+	b.mu.Unlock()
+	select {
+	case <-b.unblock:
+	default:
+		close(b.unblock)
+	}
+	return nil
+}
+
+func TestCloseDoesNotWaitForSourceRead(t *testing.T) {
+	src := &blockingCloser{
+		readStarted: make(chan struct{}),
+		unblock:     make(chan struct{}),
+	}
+	s := NewBufferedStream(src, 1<<20)
+	select {
+	case <-src.readStarted:
+	case <-time.After(time.Second):
+		t.Fatal("source Read did not start")
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- s.Close()
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Close waited for source Read")
+	}
+}
+
+func TestBufferCompleteClearsErrorAndClosesSource(t *testing.T) {
+	data := bytes.Repeat([]byte("ab"), 50)
+	src := &closeRecorder{Reader: bytes.NewReader(data)}
+	s := NewBufferedStream(src, int64(len(data)))
+	defer s.Close()
+	waitBuffered(t, s, len(data))
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if src.closeCount() >= 1 && s.Error() == nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("closeCount=%d error=%v", src.closeCount(), s.Error())
+}
+
+func TestShortBodySetsBufferError(t *testing.T) {
+	src := &closeRecorder{Reader: bytes.NewReader([]byte("xy"))}
+	s := NewBufferedStream(src, 64)
+	defer s.Close()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if s.Error() == io.ErrUnexpectedEOF {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("Error=%v, want unexpected EOF", s.Error())
+}
+
 func TestWriteToCopiesUnderLock(t *testing.T) {
 	data := []byte("cache-me")
 	src := &closeRecorder{Reader: bytes.NewReader(data)}

@@ -190,7 +190,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			m.displayPlaylist(selectedPlaylist)
-			m.indicateCurrentTrackPlaying(true)
+			m.indicateCurrentTrackPlaying(m.tracker.IsPlaying())
 
 			m.tracklist.Shufflable = (selectedPlaylist.Kind != playlist.NONE && selectedPlaylist.Kind != playlist.MYWAVE && len(selectedPlaylist.Tracks) > 0)
 		case playlist.RENAME:
@@ -288,7 +288,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				selectedPlaylist.SelectedTrack = selectedPlaylist.SelectedAlbum
 				selectedPlaylist.SelectedAlbum = -1
 				m.displayPlaylist(selectedPlaylist)
-				m.indicateCurrentTrackPlaying(true)
+				m.indicateCurrentTrackPlaying(m.tracker.IsPlaying())
 				cmd = m.playlists.SetItem(m.playlists.Index(), selectedPlaylist)
 				cmds = append(cmds, cmd)
 			}
@@ -339,6 +339,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.tracker, cmd = m.tracker.Update(message)
 		cmds = append(cmds, cmd)
+		m.indicateCurrentTrackPlaying(m.tracker.IsPlaying())
 
 	case tracker.SeekBy:
 		m.tracker, cmd = m.tracker.Update(message)

@@ -7,6 +7,11 @@ import (
 	"github.com/dece2183/yamusic-tui/config"
 )
 
+const (
+	_FILE_PERM os.FileMode = 0600
+	_DIR_PERM  os.FileMode = 0700
+)
+
 func getCacheDir() (string, error) {
 	var (
 		cacheDir string
@@ -26,8 +31,11 @@ func getCacheDir() (string, error) {
 		}
 	}
 
-	err = os.MkdirAll(cacheDir, 0755)
+	err = os.MkdirAll(cacheDir, _DIR_PERM)
 	if err != nil {
+		return "", err
+	}
+	if err := os.Chmod(cacheDir, _DIR_PERM); err != nil {
 		return "", err
 	}
 
@@ -55,8 +63,12 @@ func Write(trackId string) (*os.File, error) {
 		return nil, err
 	}
 
-	file, err := os.OpenFile(filepath.Join(dir, trackId+".mp3"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	file, err := os.OpenFile(filepath.Join(dir, trackId+".mp3"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, _FILE_PERM)
 	if err != nil {
+		return nil, err
+	}
+	if err := file.Chmod(_FILE_PERM); err != nil {
+		file.Close()
 		return nil, err
 	}
 

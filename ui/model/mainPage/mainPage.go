@@ -562,9 +562,32 @@ func (m *Model) mediaHandle() {
 	}
 }
 
-func (m *Model) coverFilePath() string {
+func openOwnerFile(path string, flag int) (*os.File, error) {
+	file, err := os.OpenFile(path, flag, 0600)
+	if err != nil {
+		return nil, err
+	}
+	if err := file.Chmod(0600); err != nil {
+		file.Close()
+		return nil, err
+	}
+	return file, nil
+}
+
+func (m *Model) tempMediaDir() string {
 	tempDir := filepath.Join(os.TempDir(), config.DirName)
-	if os.MkdirAll(tempDir, 0755) != nil {
+	if os.MkdirAll(tempDir, 0700) != nil {
+		return ""
+	}
+	if os.Chmod(tempDir, 0700) != nil {
+		return ""
+	}
+	return tempDir
+}
+
+func (m *Model) coverFilePath() string {
+	tempDir := m.tempMediaDir()
+	if tempDir == "" {
 		return ""
 	}
 	return filepath.Join(tempDir, "cover.jpg")
@@ -587,8 +610,8 @@ func (m *Model) removeCoverFiles() {
 }
 
 func (m *Model) metadataFilePath() string {
-	tempDir := filepath.Join(os.TempDir(), config.DirName)
-	if os.MkdirAll(tempDir, 0755) != nil {
+	tempDir := m.tempMediaDir()
+	if tempDir == "" {
 		return ""
 	}
 	return filepath.Join(tempDir, "metadata.mp3")

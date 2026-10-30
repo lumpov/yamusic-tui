@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+### Безопасность
+
+- Каталоги приложения (`~/.config/yamusic-tui`, кэш, `$TMPDIR/yamusic-tui`) приводятся к `0700`. Файлы лога, кэша MP3, обложки и metadata — к `0600`, в том числе если они уже существовали с `0755` ([#10](https://github.com/lumpov/yamusic-tui/pull/10)).
+- При старте предыдущий `$TMPDIR/yamusic-tui/yamusic-tui.log` удаляется, создаётся новый файл ([#10](https://github.com/lumpov/yamusic-tui/pull/10)).
+
 ### Изменено
 
 - Обложка трека не копится в `$TMPDIR/yamusic-tui/{id}.jpg`: каждый раз качается в один `cover.jpg`, файл живёт только пока играет текущий трек (MPRIS `file://`), при следующем треке и при выходе удаляются все `.jpg` в этом каталоге ([#12](https://github.com/lumpov/yamusic-tui/pull/12)).

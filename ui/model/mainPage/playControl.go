@@ -194,7 +194,7 @@ func (m *Model) playTrack(track *api.Track) {
 		if coverPath == "" {
 			return
 		}
-		coverFile, ferr := os.OpenFile(coverPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0600)
+		coverFile, ferr := openOwnerFile(coverPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC)
 		if ferr != nil {
 			log.Print(log.LVL_WARNIGN, "unable to open cover file [%s]: %s", coverPath, ferr)
 			return
@@ -289,7 +289,7 @@ func (m *Model) playTrack(track *api.Track) {
 	}
 
 	trackBuffer := stream.NewBufferedStream(trackReader, trackSize)
-	metadataFile, err := os.OpenFile(m.metadataFilePath(), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	metadataFile, err := openOwnerFile(m.metadataFilePath(), os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
 	if err == nil {
 		tag := id3v2.NewEmptyTag()
 		if trackFromCache {

@@ -143,3 +143,22 @@ func TestSaveChmodsExistingWorldReadableFile(t *testing.T) {
 		t.Fatalf("perm=%o, want %o", got, _CONFIG_PERM)
 	}
 }
+
+func TestSaveChmodsConfigDirOwnerOnly(t *testing.T) {
+	home := withHome(t)
+	dir := filepath.Join(home, ".config", DirName)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	Current = defaultConfig
+	if err := Save(); err != nil {
+		t.Fatal(err)
+	}
+	stat, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stat.Mode().Perm(); got != _DIR_PERM {
+		t.Fatalf("dir perm=%o, want %o", got, _DIR_PERM)
+	}
+}

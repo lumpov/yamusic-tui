@@ -12,6 +12,7 @@ import (
 const (
 	_CONFIG_FILE = "config.yaml"
 	_CONFIG_PERM = 0600
+	_DIR_PERM    = 0700
 )
 
 var Current Config
@@ -73,8 +74,11 @@ func getDir() (string, error) {
 	}
 
 	configDir := filepath.Join(userDir, ".config", DirName)
-	err = os.MkdirAll(configDir, 0755)
+	err = os.MkdirAll(configDir, _DIR_PERM)
 	if err != nil {
+		return "", err
+	}
+	if err := os.Chmod(configDir, _DIR_PERM); err != nil {
 		return "", err
 	}
 

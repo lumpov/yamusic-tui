@@ -13,8 +13,7 @@ func TestReadWrapperProgressAndEOF(t *testing.T) {
 	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(data)), int64(len(data)))
 	defer buf.Close()
 
-	w := &readWrapper{program: nil, emitNextOnEOF: true}
-	w.NewReader(buf)
+	w := &readWrapper{program: nil, source: buf, trackBuffer: buf, emitNextOnEOF: true}
 
 	dest := make([]byte, 64)
 	for i := 0; i < 8; i++ {

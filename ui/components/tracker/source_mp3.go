@@ -10,11 +10,11 @@ import (
 	"github.com/dece2183/yamusic-tui/stream"
 )
 
-func newPlaybackSource(reader *stream.BufferedStream) io.ReadSeeker {
+func newPlaybackSource(reader *stream.BufferedStream) (io.ReadSeeker, error) {
 	decoder, err := mp3.NewDecoder(reader)
 	if err != nil {
 		log.Print(log.LVL_ERROR, "failed to create mp3 decoder: %s", err)
-		return reader
+		return nil, err
 	}
-	return decoder
+	return decoder, nil
 }

@@ -35,7 +35,9 @@ func TestDarwinPlayerPlayPauseVolume(t *testing.T) {
 	defer buf.Close()
 
 	w := &readWrapper{trackBuffer: buf}
-	w.NewReader(buf)
+	if err := w.NewReader(buf); err != nil {
+		t.Fatal(err)
+	}
 	p := newDarwinPlayer(w)
 	defer p.Close()
 

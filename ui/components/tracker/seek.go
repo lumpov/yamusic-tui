@@ -7,7 +7,7 @@ func compressedByteOffset(totalBytes int64, durationMs, positionMs float64) int6
 		return 0
 	}
 	offset := int64(math.Round((float64(totalBytes) / durationMs) * positionMs))
-	offset += offset % 4
+	offset -= offset % 4
 	return offset
 }
 

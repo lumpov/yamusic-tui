@@ -47,6 +47,7 @@ type Model struct {
 
 	playQueue            []api.Track
 	playQueueTrackIndex  int
+	playGen              int
 	currentPlaylistIndex int
 	currentAlbumIndex    int
 
@@ -130,6 +131,21 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case LoadingMsg:
 		m.isLoading = false
 		return m, model.Cmd(playlist.CURSOR_UP)
+	case playTrackReadyMsg:
+		m.applyPlayTrack(msg)
+		return m, nil
+	case rotateTracksReadyMsg:
+		m.applyRotateTracks(msg)
+		return m, nil
+	case searchErrMsg:
+		m.isLoading = false
+		m.tracker.ShowError(msg.text)
+		return m, nil
+	case searchSuggestionsMsg:
+		m.searchDialog.SetSuggestions(msg.list)
+		return m, nil
+	case searchResultsReadyMsg:
+		return m, m.applySearchResults(msg)
 
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)
@@ -242,8 +258,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				Artists: true,
 			}
 			m.isLoading = true
-			go m.displaySearchResults(searchRes, &searchConf)
-			cmds = append(cmds, m.spinner.Tick)
+			cmds = append(cmds, m.spinner.Tick, m.displaySearchResults(searchRes, &searchConf))
 		case tracklist.ADD_TO_PLAYLIST:
 			if m.albumListActive() {
 				break
@@ -298,9 +313,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case tracker.Control:
 		switch msg {
 		case tracker.NEXT:
-			m.nextTrack()
+			cmds = append(cmds, m.nextTrack())
 		case tracker.PREV:
-			m.prevTrack()
+			cmds = append(cmds, m.prevTrack())
 		case tracker.LIKE:
 			cmd = m.likePlayingTrack()
 			cmds = append(cmds, cmd)

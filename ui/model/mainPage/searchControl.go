@@ -14,6 +14,7 @@ import (
 	"github.com/dece2183/yamusic-tui/ui/components/playlist"
 	"github.com/dece2183/yamusic-tui/ui/components/search"
 	"github.com/dece2183/yamusic-tui/ui/helpers"
+	"github.com/dece2183/yamusic-tui/ui/model"
 )
 
 func (m *Model) searchControl(msg search.Control) tea.Cmd {
@@ -28,42 +29,64 @@ func (m *Model) searchControl(msg search.Control) tea.Cmd {
 			return nil
 		}
 
-		searchRes, err := m.client.Search(req, api.SEARCH_ALL)
-		if err != nil {
-			log.Print(log.LVL_ERROR, "failed to search [%s]: %s", req, err)
-			m.tracker.ShowError("search")
-			return nil
-		}
-
 		m.isLoading = true
-		go m.displaySearchResults(searchRes, nil)
-		return m.spinner.Tick
+		items := m.playlists.Items()
+		current := m.currentPlaylistIndex
+		return tea.Batch(m.spinner.Tick, func() tea.Msg {
+			searchRes, err := m.client.Search(req, api.SEARCH_ALL)
+			if err != nil {
+				log.Print(log.LVL_ERROR, "failed to search [%s]: %s", req, err)
+				return searchErrMsg{text: "search"}
+			}
+			return m.collectSearchResults(items, searchRes, nil, current)
+		})
 	case search.CANCEL:
 		m.isSearchActive = false
 	case search.UPDATE_SUGGESTIONS:
-		suggestions, err := m.client.SearchSuggest(m.searchDialog.InputValue())
-		if err != nil {
-			log.Print(log.LVL_ERROR, "failed to obtain search [%s] suggestions: %s", m.searchDialog.InputValue(), err)
-			m.tracker.ShowError("search seggestion")
-			return nil
+		input := m.searchDialog.InputValue()
+		return func() tea.Msg {
+			suggestions, err := m.client.SearchSuggest(input)
+			if err != nil {
+				log.Print(log.LVL_ERROR, "failed to obtain search [%s] suggestions: %s", input, err)
+				return searchErrMsg{text: "search seggestion"}
+			}
+			return searchSuggestionsMsg{list: suggestions.Suggestions}
 		}
-		m.searchDialog.SetSuggestions(suggestions.Suggestions)
 	}
 
 	return cmd
 }
 
-func (m *Model) displaySearchResults(res api.SearchResult, searchConfig *config.Search) {
-	defer m.Send(LOADING_DONE)
+type searchErrMsg struct {
+	text string
+}
 
-	playlists := m.playlists.Items()
+type searchSuggestionsMsg struct {
+	list []string
+}
+
+type searchResultsReadyMsg struct {
+	playlists    []*playlist.Item
+	selectIndex  int
+	clearCurrent bool
+}
+
+func (m *Model) displaySearchResults(res api.SearchResult, searchConfig *config.Search) tea.Cmd {
+	items := m.playlists.Items()
+	current := m.currentPlaylistIndex
+	return func() tea.Msg {
+		return m.collectSearchResults(items, res, searchConfig, current)
+	}
+}
+
+func (m *Model) collectSearchResults(playlists []*playlist.Item, res api.SearchResult, searchConfig *config.Search, currentPlaylistIndex int) tea.Msg {
 	searchResIndex := len(playlists) + 2
+	clearCurrent := false
 	for i, pl := range playlists {
 		if !pl.Active && !pl.Subitem && pl.Name == "search results:" {
 			searchResIndex = i + 1
-			if m.currentPlaylistIndex > searchResIndex {
-				m.currentPlaylistIndex = -1
-				m.currentAlbumIndex = -1
+			if currentPlaylistIndex > searchResIndex {
+				clearCurrent = true
 			}
 			playlists = playlists[:i-1]
 			break
@@ -152,12 +175,24 @@ func (m *Model) displaySearchResults(res api.SearchResult, searchConfig *config.
 	}
 
 	if len(playlists) == 0 || !playlists[len(playlists)-1].Active {
-		return
+		return LOADING_DONE
 	}
 
-	m.playlists.SetItems(playlists)
-	m.playlists.Select(searchResIndex)
-	m.Send(playlist.CURSOR_DOWN)
+	return searchResultsReadyMsg{
+		playlists:    playlists,
+		selectIndex:  searchResIndex,
+		clearCurrent: clearCurrent,
+	}
+}
+
+func (m *Model) applySearchResults(msg searchResultsReadyMsg) tea.Cmd {
+	if msg.clearCurrent {
+		m.currentPlaylistIndex = -1
+		m.currentAlbumIndex = -1
+	}
+	m.playlists.SetItems(msg.playlists)
+	m.playlists.Select(msg.selectIndex)
+	return tea.Sequence(model.Cmd(playlist.CURSOR_DOWN), model.Cmd(LOADING_DONE))
 }
 
 func (m *Model) loadSearchArtist(wg *sync.WaitGroup, artist *api.Artist, withPopular bool, block *menuBlock) {

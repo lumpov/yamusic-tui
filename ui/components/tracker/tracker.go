@@ -627,14 +627,28 @@ func (m *Model) volumeFadeTick() {
 	}
 }
 
+func (m *Model) needsVolumeFade() bool {
+	if m.player == nil || !m.player.IsPlaying() {
+		return false
+	}
+	if m.volumeIncremet == 0 {
+		return m.player.Volume() != 0
+	}
+	target := m.volume
+	if m.paused {
+		target = 0
+	}
+	return m.player.Volume() != target
+}
+
 func (m *Model) volumeFader() {
 	t := time.NewTicker(_VOLUME_FADE_PERIOD)
 	for range t.C {
-		if m.program == nil {
-			m.volumeFadeTick()
+		if !m.needsVolumeFade() {
 			continue
 		}
-		if m.player == nil {
+		if m.program == nil {
+			m.volumeFadeTick()
 			continue
 		}
 		m.program.Send(volumeFadeTickMsg{})

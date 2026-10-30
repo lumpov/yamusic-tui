@@ -3,6 +3,7 @@ package tracker
 import (
 	"bytes"
 	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -10,6 +11,15 @@ import (
 	"github.com/dece2183/yamusic-tui/config"
 	"github.com/dece2183/yamusic-tui/stream"
 )
+
+func testMP3Bytes(t *testing.T) []byte {
+	t.Helper()
+	b, err := os.ReadFile("testdata/mpeg2-head.mp3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
 
 type fakePlayer struct {
 	playing bool
@@ -33,13 +43,41 @@ func (p *fakePlayer) IsPlaying() bool { return p.playing }
 
 type fakeBackend struct {
 	player *fakePlayer
+	opens  int
 }
 
 func (b *fakeBackend) Open(src *readWrapper) audioPlayer {
+	b.opens++
 	if b.player == nil {
 		b.player = &fakePlayer{}
 	}
 	return b.player
+}
+
+func TestStartTrackDoesNotOpenOnDecoderError(t *testing.T) {
+	config.InitTest()
+	prev := playbackSource
+	playbackSource = func(*stream.BufferedStream) (io.ReadSeeker, error) {
+		return nil, io.ErrUnexpectedEOF
+	}
+	defer func() { playbackSource = prev }()
+
+	m := NewForTest()
+	b := m.audio.(*fakeBackend)
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader([]byte{0, 1, 2, 3, 4, 5, 6, 7})), 8)
+	defer buf.Close()
+
+	m.StartTrack(&api.Track{Id: "1", Title: "t", DurationMs: 1000, Available: true}, buf, nil)
+
+	if b.opens != 0 {
+		t.Fatal("Open must not run when decoder fails")
+	}
+	if m.player != nil {
+		t.Fatal("player must stay nil")
+	}
+	if !m.showError || m.errorText != "mp3 decoder" {
+		t.Fatalf("error=%q", m.errorText)
+	}
 }
 
 func TestPlayPauseStopUseAudioPlayer(t *testing.T) {
@@ -47,7 +85,8 @@ func TestPlayPauseStopUseAudioPlayer(t *testing.T) {
 	m := NewForTest()
 	fp := m.audio.(*fakeBackend).player
 
-	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader([]byte{0, 1, 2, 3, 4, 5, 6, 7})), 8)
+	data := testMP3Bytes(t)
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(data)), int64(len(data)))
 	defer buf.Close()
 
 	track := &api.Track{Id: "1", Title: "t", DurationMs: 1000, Available: true}
@@ -232,7 +271,8 @@ func TestVolumeFadeTickMsgPausesPlayer(t *testing.T) {
 	config.InitTest()
 	m := NewForTest()
 	fp := m.audio.(*fakeBackend).player
-	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader([]byte{0, 1, 2, 3, 4, 5, 6, 7})), 8)
+	data := testMP3Bytes(t)
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(data)), int64(len(data)))
 	defer buf.Close()
 	m.StartTrack(&api.Track{Id: "1", Title: "t", DurationMs: 1000, Available: true}, buf, nil)
 	fp.volume = m.volume

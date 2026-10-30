@@ -8,6 +8,6 @@ import (
 	"github.com/dece2183/yamusic-tui/stream"
 )
 
-func newPlaybackSource(reader *stream.BufferedStream) io.ReadSeeker {
-	return reader
+func newPlaybackSource(reader *stream.BufferedStream) (io.ReadSeeker, error) {
+	return reader, nil
 }

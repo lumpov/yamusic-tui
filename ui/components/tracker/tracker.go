@@ -405,7 +405,11 @@ func (m *Model) StartTrack(track *api.Track, reader *stream.BufferedStream, lyri
 	}
 
 	m.track = *track
-	m.trackWrapper.NewReader(reader)
+	if err := m.trackWrapper.NewReader(reader); err != nil {
+		m.trackWrapper.Close()
+		m.ShowError("mp3 decoder")
+		return
+	}
 	m.player = m.audio.Open(m.trackWrapper)
 	m.player.SetVolume(0)
 	m.player.Play()

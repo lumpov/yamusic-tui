@@ -13,6 +13,8 @@ const (
 	_PROGRESS_UPDATE_PERIOD = 850 * time.Millisecond
 )
 
+var playbackSource = newPlaybackSource
+
 type readWrapper struct {
 	program        *tea.Program
 	source         io.ReadSeeker
@@ -23,13 +25,19 @@ type readWrapper struct {
 	lastUpdateTime time.Time
 }
 
-func (w *readWrapper) NewReader(reader *stream.BufferedStream) {
+func (w *readWrapper) NewReader(reader *stream.BufferedStream) error {
 	w.trackBuffered = false
 	w.trackDone = false
 	w.emitNextOnEOF = true
 	w.trackBuffer = reader
-	w.source = newPlaybackSource(reader)
+	source, err := playbackSource(reader)
+	if err != nil {
+		w.source = nil
+		return err
+	}
+	w.source = source
 	w.lastUpdateTime = time.Now()
+	return nil
 }
 
 func (w *readWrapper) Close() {

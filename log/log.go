@@ -67,11 +67,16 @@ func Start() {
 	if err != nil {
 		return
 	}
-	if err := f.Chmod(_FILE_PERM); err != nil {
-		f.Close()
+	_ = f.Chmod(_FILE_PERM)
+	file = f
+}
+
+func Dump(text string) {
+	if file == nil || text == "" {
 		return
 	}
-	file = f
+	_, _ = file.WriteString(text)
+	_ = file.Sync()
 }
 
 func Stop() {

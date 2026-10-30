@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dece2183/yamusic-tui/log"
+	"github.com/dece2183/yamusic-tui/playbacktrace"
 	"github.com/dece2183/yamusic-tui/stream"
 )
 
@@ -57,10 +58,12 @@ func (w *readWrapper) Read(dest []byte) (n int, err error) {
 		if w.trackBuffer.Error() != nil {
 			err = w.trackBuffer.Error()
 			log.Print(log.LVL_ERROR, "buffering error: %s", err)
+			playbacktrace.Event("read wrapper bufErr=%v", err)
 			w.send(STOP)
 			return
 		}
 		log.Print(log.LVL_WARNIGN, "mp3 decoding error: %s", err)
+		playbacktrace.Event("read wrapper decode err=%v", err)
 		err = nil
 	}
 

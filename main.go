@@ -8,6 +8,7 @@ import (
 	"github.com/dece2183/yamusic-tui/config"
 	"github.com/dece2183/yamusic-tui/log"
 	"github.com/dece2183/yamusic-tui/media"
+	"github.com/dece2183/yamusic-tui/playbacktrace"
 	"github.com/dece2183/yamusic-tui/telemetry"
 	"github.com/dece2183/yamusic-tui/ui/model"
 	loginpage "github.com/dece2183/yamusic-tui/ui/model/loginPage"
@@ -17,7 +18,10 @@ import (
 
 func main() {
 	log.Start()
-	defer log.Stop()
+	defer func() {
+		playbacktrace.Flush("exit")
+		log.Stop()
+	}()
 
 	err := config.InitialLoad()
 	if err != nil {

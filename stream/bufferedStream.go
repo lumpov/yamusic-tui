@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/dece2183/yamusic-tui/playbacktrace"
 )
 
 const (
@@ -69,17 +71,23 @@ func (h *BufferedStream) closeSource() error {
 }
 
 func (h *BufferedStream) finishReadLocked(err error) error {
-	if err != nil {
-		if err == io.EOF && !h.sourceClosed {
+	if err == io.EOF || err == http.ErrBodyReadAfterClose {
+		if !h.sourceClosed {
 			h.closeSource()
-			h.stopBuffering()
-			h.done = true
-		} else if err == http.ErrBodyReadAfterClose {
-			err = io.EOF
 		}
+		h.stopBuffering()
+		h.done = true
+		if h.lastError == io.EOF {
+			h.lastError = nil
+		}
+		return io.EOF
 	}
-	h.lastError = err
-	return err
+	if err != nil {
+		h.lastError = err
+		return err
+	}
+	h.lastError = nil
+	return nil
 }
 
 func (h *BufferedStream) readSource(p []byte) (int, error) {
@@ -88,7 +96,12 @@ func (h *BufferedStream) readSource(p []byte) (int, error) {
 	if h.source == nil {
 		return 0, io.EOF
 	}
-	return h.source.Read(p)
+	t0 := time.Now()
+	n, err := h.source.Read(p)
+	if d := time.Since(t0); d > 400*time.Millisecond {
+		playbacktrace.Event("source read wait_ms=%d n=%d err=%v", d.Milliseconds(), n, err)
+	}
+	return n, err
 }
 
 func (h *BufferedStream) readSourceFull(p []byte) (int, error) {
@@ -97,7 +110,12 @@ func (h *BufferedStream) readSourceFull(p []byte) (int, error) {
 	if h.source == nil {
 		return 0, io.EOF
 	}
-	return io.ReadFull(h.source, p)
+	t0 := time.Now()
+	n, err := io.ReadFull(h.source, p)
+	if d := time.Since(t0); d > 400*time.Millisecond {
+		playbacktrace.Event("source readFull wait_ms=%d n=%d need=%d err=%v", d.Milliseconds(), n, len(p), err)
+	}
+	return n, err
 }
 
 func (h *BufferedStream) Read(dest []byte) (n int, err error) {
@@ -271,6 +289,9 @@ func (h *BufferedStream) WriteTo(dest io.Writer) (int64, error) {
 func (h *BufferedStream) Error() error {
 	h.mux.Lock()
 	defer h.mux.Unlock()
+	if h.lastError == io.EOF || h.lastError == http.ErrBodyReadAfterClose {
+		return nil
+	}
 	return h.lastError
 }
 
@@ -288,8 +309,11 @@ func (h *BufferedStream) bufferFrames(size int64) {
 	for {
 		h.mux.Lock()
 		if h.buffered || h.done || h.totalSize <= int64(len(h.readBuffer)) {
+			nbuf := len(h.readBuffer)
 			h.stopBuffering()
+			_ = h.closeSource()
 			h.mux.Unlock()
+			playbacktrace.Event("buffer done n=%d size=%d", nbuf, h.totalSize)
 			return
 		}
 		h.mux.Unlock()
@@ -305,10 +329,21 @@ func (h *BufferedStream) bufferFrames(size int64) {
 			h.readBuffer = append(h.readBuffer, buf[:n]...)
 		}
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			short := h.totalSize > 0 && int64(len(h.readBuffer)) < h.totalSize
+			nbuf := len(h.readBuffer)
 			h.stopBuffering()
-			h.lastError = io.EOF
+			_ = h.closeSource()
+			if short {
+				h.lastError = io.ErrUnexpectedEOF
+			} else if h.lastError == io.EOF {
+				h.lastError = nil
+			}
 			h.mux.Unlock()
+			playbacktrace.Event("buffer eof n=%d size=%d short=%v err=%v", nbuf, h.totalSize, short, h.Error())
 			return
+		}
+		if err != nil && h.lastError == nil {
+			playbacktrace.Event("buffer read err=%v n=%d size=%d", err, len(h.readBuffer), h.totalSize)
 		}
 		h.lastError = err
 		h.mux.Unlock()

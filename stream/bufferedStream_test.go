@@ -131,6 +131,36 @@ func TestCloseDoesNotWaitForSourceRead(t *testing.T) {
 	}
 }
 
+func TestBufferCompleteClearsErrorAndClosesSource(t *testing.T) {
+	data := bytes.Repeat([]byte("ab"), 50)
+	src := &closeRecorder{Reader: bytes.NewReader(data)}
+	s := NewBufferedStream(src, int64(len(data)))
+	defer s.Close()
+	waitBuffered(t, s, len(data))
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if src.closeCount() >= 1 && s.Error() == nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("closeCount=%d error=%v", src.closeCount(), s.Error())
+}
+
+func TestShortBodySetsBufferError(t *testing.T) {
+	src := &closeRecorder{Reader: bytes.NewReader([]byte("xy"))}
+	s := NewBufferedStream(src, 64)
+	defer s.Close()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if s.Error() == io.ErrUnexpectedEOF {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("Error=%v, want unexpected EOF", s.Error())
+}
+
 func TestWriteToCopiesUnderLock(t *testing.T) {
 	data := []byte("cache-me")
 	src := &closeRecorder{Reader: bytes.NewReader(data)}

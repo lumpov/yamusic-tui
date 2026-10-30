@@ -9,6 +9,7 @@
 
 ### Добавлено
 
+- `playbacktrace`: события воспроизведения в памяти, сброс в `$TMPDIR/yamusic-tui/yamusic-tui.log` при смене трека и выходе.
 - Sentry: DSN в `sentry-dsn` (`config.yaml`). Пустое значение — Sentry выключен. В issues уходят panic, `log.LVL_PANIC`, поломка JSON Yandex Music API и HTTP ≥ 500. INFO/WARN, 404 текстов, 400/401 не создают issue. Токен пишется как `02kdsjh...kjds8`. В событии: версия приложения, GOOS/GOARCH, Go, hostname, cache-tracks, lyrics, buffer, rewind ([#14](https://github.com/lumpov/yamusic-tui/pull/14)).
 
 ### Безопасность
@@ -24,6 +25,10 @@
 
 ### Исправлено
 
+- Darwin: колбэк `packetsProc` не ждёт свободный буфер AudioQueue. Pause останавливал колбэки, `waitFreeBuffer` не возвращался, перемотка и play/pause переставали слушаться. Пакеты копятся в списке, enqueue вне колбэка.
+- `io.EOF` после полного буфера не пишется в `lastError`: Stop не показывает `track buffering`.
+- TEXT без меток времени снова идёт по прогрессу трека, без `No lyrics timestamps for this track`.
+- `log.Start` оставляет файл лога, если `Chmod` не удался.
 - `BufferedStream` не держит `mux` на время `Read`/`ReadFull` сети: Stop из `Update` не ждёт HTTP. Копирование в буфер — под замком.
 - Windows SMTC: токен `PlaybackPositionChangeRequested` снимается `RemovePlaybackPositionChangeRequested`, а не `RemoveButtonPressed`.
 - Иконка Play в списке треков берёт `tracker.IsPlaying()`: движение по плейлистам и Back больше не включают её на паузе. Pause/Play обновляют иконку сразу.

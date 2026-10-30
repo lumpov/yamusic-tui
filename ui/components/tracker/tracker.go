@@ -9,6 +9,7 @@ import (
 	"github.com/dece2183/yamusic-tui/api"
 	"github.com/dece2183/yamusic-tui/config"
 	"github.com/dece2183/yamusic-tui/log"
+	"github.com/dece2183/yamusic-tui/playbacktrace"
 	"github.com/dece2183/yamusic-tui/stream"
 	"github.com/dece2183/yamusic-tui/ui/helpers"
 	"github.com/dece2183/yamusic-tui/ui/model"
@@ -419,9 +420,18 @@ func (m *Model) StartTrack(track *api.Track, reader *stream.BufferedStream, lyri
 	m.playStarted = time.Now()
 	m.rewindBurst = false
 	m.rewindGen++
+	synced := 0
+	for _, line := range lyrics {
+		if line.Timestamp > 0 {
+			synced++
+		}
+	}
+	playbacktrace.Begin(track.Id, track.Title)
+	playbacktrace.Event("start dur_ms=%d lyrics=%d synced=%d len=%d", track.DurationMs, len(lyrics), synced, reader.Length())
 }
 
 func (m *Model) Stop() {
+	burst := m.rewindBurst
 	m.rewindBurst = false
 	m.rewindGen++
 	if m.player == nil {
@@ -433,7 +443,18 @@ func (m *Model) Stop() {
 		m.player.Pause()
 	}
 
-	if m.trackWrapper.trackBuffer.Error() != nil {
+	bufErr := error(nil)
+	bufProg := 0.0
+	readProg := 0.0
+	if m.trackWrapper != nil && m.trackWrapper.trackBuffer != nil {
+		bufErr = m.trackWrapper.trackBuffer.Error()
+		bufProg = m.trackWrapper.trackBuffer.BufferingProgress()
+		readProg = m.trackWrapper.trackBuffer.Progress()
+	}
+	playbacktrace.Event("stop playing=%v paused=%v burst=%v read=%.3f buf=%.3f err=%v", m.player.IsPlaying(), m.paused, burst, readProg, bufProg, bufErr)
+
+	if bufErr != nil {
+		log.Print(log.LVL_ERROR, "track buffering: %s", bufErr)
 		m.ShowError("track buffering")
 	}
 
@@ -442,6 +463,7 @@ func (m *Model) Stop() {
 	m.player = nil
 	m.playtime += time.Since(m.playStarted)
 	m.paused = true
+	playbacktrace.Flush("stop")
 }
 
 func (m *Model) IsPlaying() bool {
@@ -469,6 +491,7 @@ func (m *Model) Play() {
 	m.player.Play()
 	m.paused = false
 	m.playStarted = time.Now()
+	playbacktrace.Event("play")
 }
 
 func (m *Model) Pause() {
@@ -480,6 +503,7 @@ func (m *Model) Pause() {
 	}
 	m.playtime += time.Since(m.playStarted)
 	m.paused = true
+	playbacktrace.Event("pause")
 }
 
 func (m *Model) Rewind(amount time.Duration) tea.Cmd {
@@ -503,8 +527,10 @@ func (m *Model) Rewind(amount time.Duration) tea.Cmd {
 	pos = clampPlayableByteOffset(pos, length, m.rewindStepBytes())
 	pos -= pos % 4
 	m.rewindTargetBytes = pos
+	playbacktrace.Event("rewind amount=%s burst=%v from=%d to=%d len=%d", amount, m.rewindBurst, current, pos, length)
 	if _, err := m.player.Seek(pos, io.SeekStart); err != nil {
 		log.Print(log.LVL_ERROR, "rewind seek: %s", err)
+		playbacktrace.Event("rewind seek err=%v", err)
 	}
 
 	m.rewindGen++
@@ -542,6 +568,9 @@ func (m *Model) finishRewindBurst() {
 		m.playStarted = time.Now()
 		m.player.SetVolume(m.volume)
 		m.player.Play()
+		playbacktrace.Event("rewind settle play isPlaying=%v", m.player.IsPlaying())
+	} else {
+		playbacktrace.Event("rewind settle stay-paused")
 	}
 }
 
@@ -673,7 +702,10 @@ func (m *Model) renderLyrics() string {
 				}
 			}
 		} else {
-			currentLine = "No lyrics timestamps for this track"
+			idx := m.unsyncedLyricsIndex()
+			previousLine = m.tryGetLyricsLine(idx - 1)
+			currentLine = m.lyricsBreak(m.tryGetLyricsLine(idx))
+			nextLine = m.tryGetLyricsLine(idx + 1)
 		}
 	}
 
@@ -694,6 +726,28 @@ func (m *Model) lyricsHaveTimestamps() bool {
 		}
 	}
 	return false
+}
+
+func (m *Model) unsyncedLyricsIndex() int {
+	n := len(m.lyrics)
+	if n == 0 {
+		return 0
+	}
+	progress := 0.0
+	if m.track.DurationMs > 0 && m.trackWrapper != nil {
+		progress = float64(m.Position().Milliseconds()) / float64(m.track.DurationMs)
+	}
+	if progress < 0 {
+		progress = 0
+	}
+	if progress > 1 {
+		progress = 1
+	}
+	idx := int(progress * float64(n))
+	if idx >= n {
+		idx = n - 1
+	}
+	return idx
 }
 
 func (m *Model) tryGetLyricsLine(idx int) (line string) {

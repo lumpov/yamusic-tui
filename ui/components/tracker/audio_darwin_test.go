@@ -93,6 +93,41 @@ func TestDarwinPlayerSeekAfterEOFRestartsFeed(t *testing.T) {
 	}
 }
 
+func TestDarwinSeekDuringPauseDoesNotBlock(t *testing.T) {
+	data := bytes.Repeat([]byte{0xFF, 0xFB, 0x90, 0x00}, 256)
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(data)), int64(len(data)))
+	defer buf.Close()
+
+	w := &readWrapper{trackBuffer: buf, source: buf, emitNextOnEOF: false}
+	p := newDarwinPlayer(w)
+	defer p.Close()
+
+	p.Play()
+	time.Sleep(30 * time.Millisecond)
+	p.Pause()
+
+	done := make(chan error, 1)
+	go func() {
+		var err error
+		for i := 0; i < 20; i++ {
+			_, err = p.Seek(int64(i*16), io.SeekStart)
+			if err != nil {
+				done <- err
+				return
+			}
+		}
+		done <- nil
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Seek blocked during Pause")
+	}
+}
+
 func TestDarwinPlayerCloseWaitsForFeedThenDestroys(t *testing.T) {
 	data := bytes.Repeat([]byte{0xFF, 0xFB, 0x90, 0x00}, 256)
 	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(data)), int64(len(data)))

@@ -55,7 +55,7 @@ func (b *fakeBackend) Open(src *readWrapper) audioPlayer {
 }
 
 func TestStartTrackDoesNotOpenOnDecoderError(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	prev := playbackSource
 	playbackSource = func(*stream.BufferedStream) (io.ReadSeeker, error) {
 		return nil, io.ErrUnexpectedEOF
@@ -81,7 +81,7 @@ func TestStartTrackDoesNotOpenOnDecoderError(t *testing.T) {
 }
 
 func TestPlayPauseStopUseAudioPlayer(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	m := NewForTest()
 	fp := m.audio.(*fakeBackend).player
 
@@ -121,7 +121,7 @@ func TestPlayPauseStopUseAudioPlayer(t *testing.T) {
 }
 
 func TestRewindSeeksCompressedOffset(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	fp := &fakePlayer{playing: true}
 	m := NewForTest()
 	m.player = fp
@@ -139,7 +139,7 @@ func TestRewindSeeksCompressedOffset(t *testing.T) {
 }
 
 func TestRewindStartStaysAtZero(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	fp := &fakePlayer{playing: true}
 	m := NewForTest()
 	m.player = fp
@@ -158,7 +158,7 @@ func TestRewindStartStaysAtZero(t *testing.T) {
 }
 
 func TestRewindEndKeepsRewindStep(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	fp := &fakePlayer{playing: true}
 	m := NewForTest()
 	m.player = fp
@@ -180,7 +180,7 @@ func TestRewindEndKeepsRewindStep(t *testing.T) {
 }
 
 func TestRewindPausesUntilSettle(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	fp := &fakePlayer{playing: true}
 	m := NewForTest()
 	m.player = fp
@@ -214,7 +214,7 @@ func TestRewindPausesUntilSettle(t *testing.T) {
 }
 
 func TestPlayPauseControlTogglesPlayback(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	fp := &fakePlayer{playing: true}
 	m := NewForTest()
 	m.player = fp
@@ -237,7 +237,7 @@ func TestPlayPauseControlTogglesPlayback(t *testing.T) {
 }
 
 func TestSeekByUpdateRewinds(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	fp := &fakePlayer{playing: true}
 	m := NewForTest()
 	m.player = fp
@@ -259,7 +259,7 @@ func TestSeekByUpdateRewinds(t *testing.T) {
 }
 
 func TestVolumeToUpdateSetsVolume(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	m := NewForTest()
 	m.Update(VolumeTo(0.3))
 	if m.volume != 0.3 {
@@ -268,7 +268,7 @@ func TestVolumeToUpdateSetsVolume(t *testing.T) {
 }
 
 func TestVolumeFadeTickMsgPausesPlayer(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	m := NewForTest()
 	fp := m.audio.(*fakeBackend).player
 	data := testMP3Bytes(t)

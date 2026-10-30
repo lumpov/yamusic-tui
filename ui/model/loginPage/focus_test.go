@@ -11,7 +11,7 @@ import (
 )
 
 func TestLoginFocusToggle(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	style.Apply(config.Current.Style)
 

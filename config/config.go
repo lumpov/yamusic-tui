@@ -68,6 +68,16 @@ func chmodConfig() error {
 }
 
 func getDir() (string, error) {
+	if testDir != "" {
+		if err := os.MkdirAll(testDir, _DIR_PERM); err != nil {
+			return "", err
+		}
+		if err := os.Chmod(testDir, _DIR_PERM); err != nil {
+			return "", err
+		}
+		return testDir, nil
+	}
+
 	userDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -163,6 +173,13 @@ func save(conf Config) error {
 	}
 
 	path := filepath.Join(configDir, _CONFIG_FILE)
+	if conf.Token == "" {
+		if existing, rerr := os.ReadFile(path); rerr == nil {
+			if tok := tokenFromYAML(existing); tok != "" {
+				conf.Token = tok
+			}
+		}
+	}
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, _CONFIG_PERM)
 	if err != nil {
 		return err

@@ -9,7 +9,7 @@ import (
 )
 
 func TestRenderLyricsEmpty(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	m := NewForTest()
 	m.width = 80
 	m.showLyrics = true
@@ -22,7 +22,7 @@ func TestRenderLyricsEmpty(t *testing.T) {
 }
 
 func TestRenderLyricsWithoutTimestamps(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	m := NewForTest()
 	m.width = 80
 	m.showLyrics = true

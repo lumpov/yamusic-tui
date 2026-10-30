@@ -8,7 +8,7 @@ import (
 )
 
 func TestSelectedItemEmptyList(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	m := New(nil)
 	_ = m.Reset()
 	if got := m.SelectedItem(); got != nil {
@@ -17,7 +17,7 @@ func TestSelectedItemEmptyList(t *testing.T) {
 }
 
 func TestViewEmptyList(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	m := New(nil)
 	_ = m.Reset()
 	m.SetSize(40, 20)
@@ -25,7 +25,7 @@ func TestViewEmptyList(t *testing.T) {
 }
 
 func TestViewShowsTitleVersionAndUnofficialNote(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	config.Version = "v0.9.0-beta.3"
 	m := New(nil)
 	_ = m.Reset()

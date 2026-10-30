@@ -8,6 +8,7 @@ import (
 
 func withHome(t *testing.T) string {
 	t.Helper()
+	testDir = ""
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	return home
@@ -160,5 +161,125 @@ func TestSaveChmodsConfigDirOwnerOnly(t *testing.T) {
 	}
 	if got := stat.Mode().Perm(); got != _DIR_PERM {
 		t.Fatalf("dir perm=%o, want %o", got, _DIR_PERM)
+	}
+}
+
+func TestSaveDoesNotReplaceExistingTokenWithEmpty(t *testing.T) {
+	home := withHome(t)
+	dir := filepath.Join(home, ".config", DirName)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := configPath(home)
+	if err := os.WriteFile(path, []byte("token: keep-me\nvolume: 0.2\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	Current = defaultConfig
+	if Current.Token != "" {
+		t.Fatal("default token must be empty")
+	}
+	if err := Save(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tok := tokenFromYAML(got); tok != "keep-me" {
+		t.Fatalf("token=%q, want keep-me", tok)
+	}
+}
+
+func TestInitTestPathIsNotOriginalConfig(t *testing.T) {
+	InitTest(t)
+	path := Path()
+	if path == "" {
+		t.Fatal("Path empty")
+	}
+	if originalConfigPath != "" && path == originalConfigPath {
+		t.Fatal("InitTest Path must not be product config.yaml")
+	}
+}
+
+func TestInitTestSaveDoesNotTouchProductConfig(t *testing.T) {
+	live := originalConfigPath
+	var before []byte
+	var mtime os.FileInfo
+	if live != "" {
+		if b, err := os.ReadFile(live); err == nil {
+			before = b
+			mtime, _ = os.Stat(live)
+		}
+	}
+	InitTest(t)
+	Current.Token = ""
+	Current.Volume = 0.11
+	if err := Save(); err != nil {
+		t.Fatal(err)
+	}
+	if live == "" {
+		return
+	}
+	after, err := os.ReadFile(live)
+	if len(before) == 0 {
+		if err == nil {
+			t.Fatal("product config.yaml created by InitTest Save")
+		}
+		return
+	}
+	if err != nil {
+		t.Fatal("product config.yaml disappeared")
+	}
+	st, err := os.Stat(live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mtime != nil && !st.ModTime().Equal(mtime.ModTime()) {
+		t.Fatal("product config.yaml mtime changed")
+	}
+	if string(before) != string(after) {
+		t.Fatal("product config.yaml content changed")
+	}
+	got, err := os.ReadFile(Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := tokenFromYAML(before); want != "" && tokenFromYAML(got) != want {
+		t.Fatal("test copy lost token from original")
+	}
+}
+
+func TestInitTestCopiesOriginalEachCall(t *testing.T) {
+	InitTest(t)
+	Current.Token = "spoiled"
+	Current.Volume = 0.01
+	if err := Save(); err != nil {
+		t.Fatal(err)
+	}
+	InitTest(t)
+	got, err := os.ReadFile(Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := originalConfigBytes()
+	if tokenFromYAML(got) == "spoiled" && tokenFromYAML(orig) != "spoiled" {
+		t.Fatal("InitTest reused spoiled test config")
+	}
+	if tokenFromYAML(got) != tokenFromYAML(orig) {
+		t.Fatal("InitTest copy token must match original")
+	}
+}
+
+func TestInitTestUsesFixtureWhenProductMissing(t *testing.T) {
+	prev := originalConfigPath
+	originalConfigPath = filepath.Join(t.TempDir(), "nope.yaml")
+	t.Cleanup(func() { originalConfigPath = prev })
+	InitTest(t)
+	got, err := os.ReadFile(Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tokenFromYAML(got) != "test-token" {
+		t.Fatal("missing product must copy testdata fixture")
 	}
 }

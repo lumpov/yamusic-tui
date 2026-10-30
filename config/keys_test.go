@@ -3,7 +3,7 @@ package config
 import "testing"
 
 func TestDefaultPlaylistKeysArePlusMinus(t *testing.T) {
-	InitTest()
+	InitTest(t)
 
 	if !Current.Controls.PlaylistsUp.Contains("+") {
 		t.Fatalf("playlists-up: want +, keys=%v", Current.Controls.PlaylistsUp)
@@ -20,7 +20,7 @@ func TestDefaultPlaylistKeysArePlusMinus(t *testing.T) {
 }
 
 func TestDefaultVolumeKeysAreBrackets(t *testing.T) {
-	InitTest()
+	InitTest(t)
 
 	if !Current.Controls.PlayerVolUp.Contains("]") {
 		t.Fatalf("player-vol-up: want ], keys=%v", Current.Controls.PlayerVolUp)
@@ -37,7 +37,7 @@ func TestDefaultVolumeKeysAreBrackets(t *testing.T) {
 }
 
 func TestPlusIsNotVolumeAndNotCtrlUp(t *testing.T) {
-	InitTest()
+	InitTest(t)
 
 	if Current.Controls.PlaylistsUp.Contains("+") == Current.Controls.PlayerVolUp.Contains("+") {
 		t.Fatal("+ must belong only to playlists-up")

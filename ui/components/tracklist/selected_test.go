@@ -7,7 +7,7 @@ import (
 )
 
 func TestSelectedItemEmptyList(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	likes := make(map[string]bool)
 	cache := make(map[string]bool)
 	m := New(nil, &likes, &cache)

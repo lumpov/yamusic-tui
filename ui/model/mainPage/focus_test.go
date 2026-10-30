@@ -39,7 +39,7 @@ func TestSkipUIProgressWhenBlurred(t *testing.T) {
 }
 
 func TestFocusAndBlurMessagesToggleFlag(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	m := &Model{uiFocused: true}
 
 	next, _ := m.Update(tea.BlurMsg{})
@@ -56,7 +56,7 @@ func TestFocusAndBlurMessagesToggleFlag(t *testing.T) {
 }
 
 func TestViewDimsWhenBlurred(t *testing.T) {
-	config.InitTest()
+	config.InitTest(t)
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	style.Apply(config.Current.Style)
 

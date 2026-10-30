@@ -13,7 +13,7 @@ func TestWriteCreatesOwnerOnlyCache(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX file modes")
 	}
-	config.InitTest()
+	config.InitTest(t)
 	dir := t.TempDir()
 	if err := os.Chmod(dir, 0755); err != nil {
 		t.Fatal(err)

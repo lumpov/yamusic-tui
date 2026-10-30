@@ -15,7 +15,7 @@ func TestStartCreatesOwnerOnlyLog(t *testing.T) {
 	}
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp)
-	config.InitTest()
+	config.InitTest(t)
 
 	Start()
 	defer Stop()
@@ -43,7 +43,7 @@ func TestStartCreatesOwnerOnlyLog(t *testing.T) {
 func TestStartDeletesPreviousLog(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp)
-	config.InitTest()
+	config.InitTest(t)
 
 	Start()
 	path := Location()

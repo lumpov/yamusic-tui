@@ -36,6 +36,9 @@ func TestSkipUIProgressWhenBlurred(t *testing.T) {
 	if skipUIProgress(false, tracker.PLAYPAUSE) {
 		t.Fatal("media playpause must not be skipped while blurred")
 	}
+	if !skipUIProgress(false, spinner.TickMsg{}) {
+		t.Fatal("spinner frames must be skipped while blurred")
+	}
 }
 
 func TestFocusAndBlurMessagesToggleFlag(t *testing.T) {
@@ -77,5 +80,11 @@ func TestViewDimsWhenBlurred(t *testing.T) {
 	}
 	if blurred != style.Dimmed(focused) {
 		t.Fatal("blurred view must be the focused view passed through Dimmed")
+	}
+
+	m.width = 20
+	cached := m.View()
+	if cached != blurred {
+		t.Fatal("blurred View must return idleView, not rebuild")
 	}
 }

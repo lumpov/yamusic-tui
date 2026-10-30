@@ -267,6 +267,30 @@ func TestVolumeToUpdateSetsVolume(t *testing.T) {
 	}
 }
 
+func TestNeedsVolumeFadeFalseWhenAtTarget(t *testing.T) {
+	config.InitTest(t)
+	m := NewForTest()
+	m.player = &fakePlayer{playing: true, volume: 0.5}
+	m.volume = 0.5
+	m.paused = false
+	m.volumeIncremet = 0.25
+	if m.needsVolumeFade() {
+		t.Fatal("at target must not fade")
+	}
+}
+
+func TestNeedsVolumeFadeTrueWhilePausing(t *testing.T) {
+	config.InitTest(t)
+	m := NewForTest()
+	m.player = &fakePlayer{playing: true, volume: 0.5}
+	m.volume = 0.5
+	m.paused = true
+	m.volumeIncremet = 0.25
+	if !m.needsVolumeFade() {
+		t.Fatal("pause fade-out must tick")
+	}
+}
+
 func TestVolumeFadeTickMsgPausesPlayer(t *testing.T) {
 	config.InitTest(t)
 	m := NewForTest()

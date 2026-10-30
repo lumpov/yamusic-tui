@@ -9,7 +9,7 @@ import (
 	"github.com/dece2183/yamusic-tui/log"
 )
 
-const Enabled = true
+const Enabled = false
 
 const maxEvents = 2000
 

@@ -411,6 +411,14 @@ func (m *Model) StartTrack(track *api.Track, reader *stream.BufferedStream, lyri
 		m.ShowError("mp3 decoder")
 		return
 	}
+	synced := 0
+	for _, line := range lyrics {
+		if line.Timestamp > 0 {
+			synced++
+		}
+	}
+	playbacktrace.Begin(track.Id, track.Title)
+	playbacktrace.Event("start dur_ms=%d lyrics=%d synced=%d len=%d", track.DurationMs, len(lyrics), synced, reader.Length())
 	m.player = m.audio.Open(m.trackWrapper)
 	m.player.SetVolume(0)
 	m.player.Play()
@@ -420,14 +428,6 @@ func (m *Model) StartTrack(track *api.Track, reader *stream.BufferedStream, lyri
 	m.playStarted = time.Now()
 	m.rewindBurst = false
 	m.rewindGen++
-	synced := 0
-	for _, line := range lyrics {
-		if line.Timestamp > 0 {
-			synced++
-		}
-	}
-	playbacktrace.Begin(track.Id, track.Title)
-	playbacktrace.Event("start dur_ms=%d lyrics=%d synced=%d len=%d", track.DurationMs, len(lyrics), synced, reader.Length())
 }
 
 func (m *Model) Stop() {

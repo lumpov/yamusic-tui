@@ -79,6 +79,8 @@ func (wh *WinHandler) SendAnswer(ans any) {
 }
 
 func (wh *WinHandler) OnEnded() {
+	wh.playState = PLAY_STOPED
+	_ = wh.setState(wh.playState)
 }
 
 func (wh *WinHandler) OnVolume() {

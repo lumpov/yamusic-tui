@@ -9,7 +9,7 @@
 
 ### Добавлено
 
-- `playbacktrace`: события воспроизведения в памяти, сброс в `$TMPDIR/yamusic-tui/yamusic-tui.log` при смене трека и выходе ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
+- `playbacktrace`: события воспроизведения в памяти, сброс в `$TMPDIR/yamusic-tui/yamusic-tui.log` при смене трека и выходе. По умолчанию выключен (`Enabled = false`) ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
 - Sentry: DSN в `sentry-dsn` (`config.yaml`). Пустое значение — Sentry выключен. В issues уходят panic, `log.LVL_PANIC`, поломка JSON Yandex Music API и HTTP ≥ 500. INFO/WARN, 404 текстов, 400/401 не создают issue. Токен пишется как `02kdsjh...kjds8`. В событии: версия приложения, GOOS/GOARCH, Go, hostname, cache-tracks, lyrics, buffer, rewind ([#14](https://github.com/lumpov/yamusic-tui/pull/14)).
 
 ### Безопасность
@@ -25,7 +25,10 @@
 
 ### Исправлено
 
-- Darwin Touch Bar / Now Playing: `OnPlayPause` ставит `PlaybackRate` 1 или 0, не затирая название трека. `Update` сообщает состояние после Pause/Play ([#25](https://github.com/lumpov/yamusic-tui/pull/25)).
+- Darwin Touch Bar / Now Playing: `OnPlayPause` ставит `PlaybackRate` 1 или 0, `OnSeek` — `ElapsedPlaybackTime`, не затирая название трека. `Update` сообщает состояние после Pause/Play ([#25](https://github.com/lumpov/yamusic-tui/pull/25)).
+- Windows SMTC: `OnEnded` ставит `MediaPlaybackStatusStopped`.
+- Чтение закрытого HTTP-тела после полного буфера — `io.EOF`, без `mp3 decoding error`.
+- `playbacktrace.Enabled` выключен: события не пишутся в лог.
 - `GET_*` медиакнопок читают tracker в `Update`, а не из горутины `mediaHandle`. `OnPlayback` получает метаданные аргументом и не ждёт `ansChan` на потоке UI ([#25](https://github.com/lumpov/yamusic-tui/pull/25)).
 - Загрузка трека, поиск и догрузка ротора больше не вызывают HTTP из `Update`. Сеть идёт в `tea.Cmd`, `Update` применяет готовый результат ([#24](https://github.com/lumpov/yamusic-tui/pull/24)).
 - Darwin: колбэк `packetsProc` не ждёт свободный буфер AudioQueue. Pause останавливал колбэки, `waitFreeBuffer` не возвращался, перемотка и play/pause переставали слушаться. Пакеты копятся в списке, enqueue вне колбэка ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).

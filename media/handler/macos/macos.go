@@ -174,6 +174,21 @@ static void setNowPlayingPlaybackRate(int isPlaying) {
     [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:info];
 }
 
+static void setNowPlayingElapsed(double elapsedSeconds) {
+    NSDictionary *current = [[MPNowPlayingInfoCenter defaultCenter] nowPlayingInfo];
+    NSMutableDictionary *info;
+    if (current != nil) {
+        info = [current mutableCopy];
+    } else {
+        info = [NSMutableDictionary dictionary];
+    }
+    if (elapsedSeconds < 0) {
+        elapsedSeconds = 0;
+    }
+    info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(elapsedSeconds);
+    [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:info];
+}
+
 static void clearNowPlayingInfo(void) {
     [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:nil];
 }
@@ -303,6 +318,13 @@ func (mh *MacosHandler) OnPlayPause(playing bool) {
 }
 
 func (mh *MacosHandler) OnSeek(position time.Duration) {
+	mh.msgMux.Lock()
+	closed := mh.closed
+	mh.msgMux.Unlock()
+	if closed {
+		return
+	}
+	C.setNowPlayingElapsed(C.double(position.Seconds()))
 }
 
 func sendMsg(msg handler.Message) {

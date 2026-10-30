@@ -11,6 +11,7 @@ import (
 	_ "image/png"
 
 	"github.com/bogem/id3v2/v2"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dece2183/yamusic-tui/api"
 	"github.com/dece2183/yamusic-tui/cache"
 	"github.com/dece2183/yamusic-tui/log"
@@ -44,50 +45,75 @@ func (m *Model) feedbackOnTrack(batch string) *api.RotorFeedback {
 	return fb
 }
 
-func (m *Model) rotateTracks(pl *playlist.Item) {
-	if !pl.Rotor {
-		return
-	}
+type rotateTracksReadyMsg struct {
+	sessionId string
+	batchId   string
+	track     api.Track
+	err       error
+}
 
-	suggestedTracks, err := m.client.RotorSessionTracks(pl.SessionId, []*api.RotorFeedback{}, pl.Tracks)
-	if err != nil {
-		log.Print(log.LVL_ERROR, "failed to obtain more rotor tracks: %s", err)
-		m.tracker.ShowError("next track obtain failure")
-		return
+func (m *Model) rotateTracksCmd(pl *playlist.Item) tea.Cmd {
+	if pl == nil || !pl.Rotor || m.client == nil {
+		return nil
 	}
-
-	if len(suggestedTracks.Sequence) == 0 {
-		log.Print(log.LVL_ERROR, "failed to obtain more rotor tracks: empty sequence")
-		m.tracker.ShowError("next track obtain failure")
-		return
-	}
-
-	pl.SessionBatch = suggestedTracks.BatchId
-	pl.Tracks = append(pl.Tracks, suggestedTracks.Sequence[0].Track)
-	items := m.playlists.Items()
-	if m.currentPlaylistIndex >= 0 && m.currentPlaylistIndex < len(items) && items[m.currentPlaylistIndex].IsSame(pl) {
-		m.playQueue = pl.Tracks
-	}
-
-	if m.playlists.SelectedItem().IsSame(pl) {
-		tackItems := m.tracklist.Items()
-		if len(tackItems) > 0 {
-			lastTrack := tackItems[len(tackItems)-1]
-			lastTrack.IsSuggestion = false
-			m.tracklist.SetItem(len(tackItems)-1, lastTrack)
+	sessionId := pl.SessionId
+	tracks := append([]api.Track(nil), pl.Tracks...)
+	client := m.client
+	return func() tea.Msg {
+		suggestedTracks, err := client.RotorSessionTracks(sessionId, []*api.RotorFeedback{}, tracks)
+		if err != nil {
+			log.Print(log.LVL_ERROR, "failed to obtain more rotor tracks: %s", err)
+			return rotateTracksReadyMsg{sessionId: sessionId, err: err}
 		}
-		m.tracklist.InsertItem(-1, tracklist.Item{
-			Track:        &pl.Tracks[len(pl.Tracks)-1],
-			Artists:      helpers.ArtistList(suggestedTracks.Sequence[0].Track.Artists),
-			IsSuggestion: true,
-		})
+		if len(suggestedTracks.Sequence) == 0 {
+			log.Print(log.LVL_ERROR, "failed to obtain more rotor tracks: empty sequence")
+			return rotateTracksReadyMsg{sessionId: sessionId, err: fmt.Errorf("empty sequence")}
+		}
+		return rotateTracksReadyMsg{
+			sessionId: sessionId,
+			batchId:   suggestedTracks.BatchId,
+			track:     suggestedTracks.Sequence[0].Track,
+		}
 	}
 }
 
-func (m *Model) prevTrack() {
+func (m *Model) applyRotateTracks(msg rotateTracksReadyMsg) {
+	if msg.err != nil || msg.sessionId == "" {
+		m.tracker.ShowError("next track obtain failure")
+		return
+	}
+	items := m.playlists.Items()
+	for i, pl := range items {
+		if pl == nil || pl.SessionId != msg.sessionId {
+			continue
+		}
+		pl.SessionBatch = msg.batchId
+		pl.Tracks = append(pl.Tracks, msg.track)
+		if m.currentPlaylistIndex >= 0 && m.currentPlaylistIndex < len(items) && items[m.currentPlaylistIndex].IsSame(pl) {
+			m.playQueue = pl.Tracks
+		}
+		if selected := m.playlists.SelectedItem(); selected != nil && selected.IsSame(pl) {
+			tackItems := m.tracklist.Items()
+			if len(tackItems) > 0 {
+				lastTrack := tackItems[len(tackItems)-1]
+				lastTrack.IsSuggestion = false
+				m.tracklist.SetItem(len(tackItems)-1, lastTrack)
+			}
+			m.tracklist.InsertItem(-1, tracklist.Item{
+				Track:        &pl.Tracks[len(pl.Tracks)-1],
+				Artists:      helpers.ArtistList(msg.track.Artists),
+				IsSuggestion: true,
+			})
+		}
+		m.playlists.SetItem(i, pl)
+		return
+	}
+}
+
+func (m *Model) prevTrack() tea.Cmd {
 	if len(m.playQueue) == 0 || m.playQueueTrackIndex == 0 {
 		m.Send(tracker.STOP)
-		return
+		return nil
 	}
 
 	m.playQueueTrackIndex--
@@ -116,18 +142,19 @@ func (m *Model) prevTrack() {
 	track := &m.playQueue[m.playQueueTrackIndex]
 	if !track.Available {
 		m.Send(tracker.STOP)
-		return
+		return nil
 	}
 
-	m.playTrack(track)
+	return m.playTrack(track)
 }
 
-func (m *Model) nextTrack() {
+func (m *Model) nextTrack() tea.Cmd {
 	if len(m.playQueue) == 0 {
 		m.Send(tracker.STOP)
-		return
+		return nil
 	}
 
+	var rotate tea.Cmd
 	m.playQueueTrackIndex++
 	for m.playQueueTrackIndex < len(m.playQueue)-1 && !m.playQueue[m.playQueueTrackIndex].Available {
 		m.playQueueTrackIndex++
@@ -149,7 +176,7 @@ func (m *Model) nextTrack() {
 		}
 
 		if currentPlaylist.CurrentTrack == len(m.playQueue)-1 {
-			m.rotateTracks(currentPlaylist)
+			rotate = m.rotateTracksCmd(currentPlaylist)
 		}
 
 		m.playlists.SetItem(m.currentPlaylistIndex, currentPlaylist)
@@ -158,20 +185,37 @@ func (m *Model) nextTrack() {
 	if m.playQueueTrackIndex >= len(m.playQueue) {
 		m.playQueueTrackIndex = 0
 		m.Send(tracker.STOP)
-		return
+		return rotate
 	}
 
 	track := &m.playQueue[m.playQueueTrackIndex]
 	if !track.Available {
 		m.Send(tracker.STOP)
-		return
+		return rotate
 	}
 
-	m.playTrack(track)
+	return tea.Batch(rotate, m.playTrack(track))
 }
 
-func (m *Model) playTrack(track *api.Track) {
+type playTrackReadyMsg struct {
+	gen       int
+	track     *api.Track
+	buffer    *stream.BufferedStream
+	lyrics    []api.LyricPair
+	fromCache bool
+	err       error
+}
+
+func (m *Model) playTrack(track *api.Track) tea.Cmd {
 	m.tracker.Stop()
+	m.playGen++
+	gen := m.playGen
+	return func() tea.Msg {
+		return m.loadPlayTrack(gen, track)
+	}
+}
+
+func (m *Model) loadPlayTrack(gen int, track *api.Track) playTrackReadyMsg {
 
 	var (
 		wg sync.WaitGroup
@@ -288,8 +332,7 @@ func (m *Model) playTrack(track *api.Track) {
 		playbacktrace.Begin(track.Id, track.Title)
 		playbacktrace.Event("load fail err=%v", downloadErr)
 		playbacktrace.Flush("download-fail")
-		m.tracker.ShowError("track download")
-		return
+		return playTrackReadyMsg{gen: gen, track: track, err: downloadErr}
 	}
 
 	trackBuffer := stream.NewBufferedStream(trackReader, trackSize)
@@ -333,30 +376,53 @@ func (m *Model) playTrack(track *api.Track) {
 		log.Print(log.LVL_WARNIGN, "failed to create metadata file: %s", err)
 	}
 
-	if m.currentPlaylistIndex >= 0 {
-		currentPlaylist := m.playlists.Items()[m.currentPlaylistIndex]
-		if currentPlaylist.Rotor {
-			ev := api.NewTrackFeedbackEvent(api.EV_TRACK_STARTED, track, 0)
-			go m.client.RotorSessionFeedback(currentPlaylist.SessionId, api.NewFeedback(currentPlaylist.SessionBatch, ev))
-			log.Print(log.LVL_INFO, "feedback event sended: "+ev.Type+" track: "+track.Title)
-		}
-	}
-
-	m.tracker.StartTrack(track, trackBuffer, lyrics)
-	playbacktrace.Event("load cache=%v size=%d", trackFromCache, trackSize)
-	m.indicateCurrentTrackPlaying(true)
-	m.mediaHandler.OnPlayback()
-
-	if m.client != nil {
-		go m.client.PlayTrack(track, trackFromCache)
+	return playTrackReadyMsg{
+		gen:       gen,
+		track:     track,
+		buffer:    trackBuffer,
+		lyrics:    lyrics,
+		fromCache: trackFromCache,
 	}
 }
 
-func (m *Model) playSelectedPlaylist(trackIndex int) {
+func (m *Model) applyPlayTrack(msg playTrackReadyMsg) {
+	if msg.gen != m.playGen {
+		if msg.buffer != nil {
+			msg.buffer.Close()
+		}
+		return
+	}
+	if msg.err != nil || msg.buffer == nil {
+		m.tracker.ShowError("track download")
+		return
+	}
+
+	if m.currentPlaylistIndex >= 0 {
+		currentPlaylist := m.playlists.Items()[m.currentPlaylistIndex]
+		if currentPlaylist.Rotor && m.client != nil {
+			ev := api.NewTrackFeedbackEvent(api.EV_TRACK_STARTED, msg.track, 0)
+			go m.client.RotorSessionFeedback(currentPlaylist.SessionId, api.NewFeedback(currentPlaylist.SessionBatch, ev))
+			log.Print(log.LVL_INFO, "feedback event sended: "+ev.Type+" track: "+msg.track.Title)
+		}
+	}
+
+	m.tracker.StartTrack(msg.track, msg.buffer, msg.lyrics)
+	playbacktrace.Event("load cache=%v size=%d", msg.fromCache, msg.buffer.Length())
+	m.indicateCurrentTrackPlaying(true)
+	if m.mediaHandler != nil {
+		m.mediaHandler.OnPlayback()
+	}
+
+	if m.client != nil {
+		go m.client.PlayTrack(msg.track, msg.fromCache)
+	}
+}
+
+func (m *Model) playSelectedPlaylist(trackIndex int) tea.Cmd {
 	selectedPlaylist := m.playlists.SelectedItem()
 	if selectedPlaylist == nil || len(selectedPlaylist.Tracks) == 0 || selectedPlaylist.SelectedTrack < 0 || selectedPlaylist.SelectedTrack >= len(selectedPlaylist.Tracks) {
 		m.Send(tracker.STOP)
-		return
+		return nil
 	}
 
 	trackToPlay := &selectedPlaylist.Tracks[selectedPlaylist.SelectedTrack]
@@ -366,10 +432,10 @@ func (m *Model) playSelectedPlaylist(trackIndex int) {
 		if currentPlaylist.IsSame(selectedPlaylist) && selectedPlaylist.CurrentTrack == trackIndex && m.tracker.CurrentTrack().Id == trackToPlay.Id {
 			if m.tracker.IsPlaying() {
 				m.tracker.Pause()
-				return
+				return nil
 			} else {
 				m.tracker.Play()
-				return
+				return nil
 			}
 		}
 		if currentPlaylist.Rotor {
@@ -386,6 +452,7 @@ func (m *Model) playSelectedPlaylist(trackIndex int) {
 
 	m.indicateCurrentTrackPlaying(false)
 
+	var rotate tea.Cmd
 	if selectedPlaylist.Rotor {
 		if m.currentPlaylistIndex != m.playlists.Index() {
 			ev := api.NewRadioFeedbackEvent(api.EV_RADIO_STARTED)
@@ -394,7 +461,7 @@ func (m *Model) playSelectedPlaylist(trackIndex int) {
 			m.currentPlaylistIndex = m.playlists.Index()
 		}
 		if trackIndex == len(selectedPlaylist.Tracks)-1 {
-			m.rotateTracks(selectedPlaylist)
+			rotate = m.rotateTracksCmd(selectedPlaylist)
 		}
 	}
 
@@ -409,5 +476,5 @@ func (m *Model) playSelectedPlaylist(trackIndex int) {
 	m.playlists.SetItem(m.currentPlaylistIndex, selectedPlaylist)
 	m.playQueue = selectedPlaylist.Tracks
 	m.playQueueTrackIndex = trackIndex
-	m.playTrack(trackToPlay)
+	return tea.Batch(rotate, m.playTrack(trackToPlay))
 }

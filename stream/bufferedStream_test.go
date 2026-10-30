@@ -77,6 +77,60 @@ func TestSeekEndCloseClosesSource(t *testing.T) {
 	}
 }
 
+type blockingCloser struct {
+	readStarted chan struct{}
+	unblock     chan struct{}
+	mu          sync.Mutex
+	closed      int
+}
+
+func (b *blockingCloser) Read(p []byte) (int, error) {
+	select {
+	case <-b.readStarted:
+	default:
+		close(b.readStarted)
+	}
+	<-b.unblock
+	return 0, io.EOF
+}
+
+func (b *blockingCloser) Close() error {
+	b.mu.Lock()
+	b.closed++
+	b.mu.Unlock()
+	select {
+	case <-b.unblock:
+	default:
+		close(b.unblock)
+	}
+	return nil
+}
+
+func TestCloseDoesNotWaitForSourceRead(t *testing.T) {
+	src := &blockingCloser{
+		readStarted: make(chan struct{}),
+		unblock:     make(chan struct{}),
+	}
+	s := NewBufferedStream(src, 1<<20)
+	select {
+	case <-src.readStarted:
+	case <-time.After(time.Second):
+		t.Fatal("source Read did not start")
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- s.Close()
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Close waited for source Read")
+	}
+}
+
 func TestWriteToCopiesUnderLock(t *testing.T) {
 	data := []byte("cache-me")
 	src := &closeRecorder{Reader: bytes.NewReader(data)}

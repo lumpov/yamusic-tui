@@ -24,6 +24,7 @@
 
 ### Исправлено
 
+- `BufferedStream` не держит `mux` на время `Read`/`ReadFull` сети: Stop из `Update` не ждёт HTTP. Копирование в буфер — под замком.
 - Windows SMTC: токен `PlaybackPositionChangeRequested` снимается `RemovePlaybackPositionChangeRequested`, а не `RemoveButtonPressed`.
 - Иконка Play в списке треков берёт `tracker.IsPlaying()`: движение по плейлистам и Back больше не включают её на паузе. Pause/Play обновляют иконку сразу.
 - Без фокуса окна `View` не пересобирает списки: отдаёт снимок `idleView`. Bubble Tea после каждого `Update` всегда рисует кадр; `skipUIProgress` закрывал только прогресс, а `volumeFadeTickMsg` и прочие сообщения всё равно собирали lipgloss. `volumeFader` шлёт тик только пока громкость не на цели.

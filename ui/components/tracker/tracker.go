@@ -500,8 +500,8 @@ func (m *Model) Rewind(amount time.Duration) tea.Cmd {
 		m.player.Pause()
 	}
 	pos := current + compressedByteOffset(length, float64(m.track.DurationMs), float64(amount.Milliseconds()))
-	pos += pos % 4
 	pos = clampPlayableByteOffset(pos, length, m.rewindStepBytes())
+	pos -= pos % 4
 	m.rewindTargetBytes = pos
 	if _, err := m.player.Seek(pos, io.SeekStart); err != nil {
 		log.Print(log.LVL_ERROR, "rewind seek: %s", err)
@@ -557,6 +557,7 @@ func (m *Model) SetPos(pos time.Duration) {
 		length,
 		m.rewindStepBytes(),
 	)
+	byteOffset -= byteOffset % 4
 	m.player.Seek(byteOffset, io.SeekStart)
 }
 

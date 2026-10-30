@@ -23,6 +23,7 @@
 
 ### Исправлено
 
+- Перемотка выравнивает байтовый offset вниз на границу PCM-сэмпла (4 байта, s16le stereo). Было `offset += offset % 4` (1→2, 3→6, не кратно 4) ([#17](https://github.com/lumpov/yamusic-tui/pull/17)).
 - Если MP3-декодер не создаётся, oto не получает сырой MP3 (ожидает PCM s16le). Open не вызывается, в трекере `mp3 decoder` ([#16](https://github.com/lumpov/yamusic-tui/pull/16)).
 - Если у текста песни нет меток времени, вместо статичных строк показывается `No lyrics timestamps for this track` (как `No lyrics for this track`, когда текста нет) ([#11](https://github.com/lumpov/yamusic-tui/pull/11)).
 - После выхода обработчик медиа не закрывает `msgChan`, пока горутины и колбэки ещё могут писать: Windows ждёт `updateTimeline`, macOS обнуляет handler до `close`, Linux MPRIS ставит `closed` после `Stop` ([#15](https://github.com/lumpov/yamusic-tui/pull/15)).

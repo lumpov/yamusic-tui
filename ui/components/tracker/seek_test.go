@@ -15,6 +15,29 @@ func TestCompressedByteOffsetMidTrack(t *testing.T) {
 	}
 }
 
+func TestCompressedByteOffsetAlignsDownToSample(t *testing.T) {
+	cases := []struct {
+		pos  float64
+		want int64
+	}{
+		{1, 0},
+		{2, 0},
+		{3, 0},
+		{5, 4},
+		{6, 4},
+		{7, 4},
+	}
+	for _, tc := range cases {
+		got := compressedByteOffset(1000, 1000, tc.pos)
+		if got != tc.want {
+			t.Fatalf("pos=%v got %d, want %d", tc.pos, got, tc.want)
+		}
+		if got%4 != 0 {
+			t.Fatalf("pos=%v got %d, not aligned to 4", tc.pos, got)
+		}
+	}
+}
+
 func TestCompressedByteOffsetNegativeRewind(t *testing.T) {
 	got := compressedByteOffset(1000, 1000, -100)
 	if got >= 0 {

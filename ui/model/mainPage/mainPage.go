@@ -56,6 +56,7 @@ type Model struct {
 
 	likedTracksMap  map[string]bool
 	cachedTracksMap map[string]bool
+	shuffleOn       bool
 }
 
 // mainpage.Model constructor.
@@ -106,7 +107,13 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(tea.SetWindowTitle(config.DirName), m.spinner.Tick)
 }
 
-type mediaShuffleMsg struct{}
+type mediaShuffleMsg struct {
+	on bool
+}
+
+type mediaOpenUriMsg struct {
+	trackId string
+}
 
 func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	var (
@@ -184,6 +191,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.inputDialog, cmd = m.inputDialog.Update(message)
 			cmds = append(cmds, cmd)
 		case controls.Reload.Contains(keypress):
+			m.shuffleOn = false
 			m.isLoading = true
 			cmd = m.playlists.Reset()
 			cmds = append(cmds, cmd)
@@ -352,7 +360,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case tracker.REWIND:
 			m.mediaHandler.OnSeek(m.tracker.Position())
 		case tracker.VOLUME:
-			m.mediaHandler.OnVolume()
+			if m.mediaHandler != nil {
+				m.mediaHandler.OnVolume(m.tracker.Volume())
+			}
 		case tracker.CACHE_TRACK:
 			cmd = m.cacheCurrentTrack()
 			cmds = append(cmds, cmd)
@@ -385,8 +395,17 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case tracker.VolumeTo:
 		m.tracker, cmd = m.tracker.Update(message)
 		cmds = append(cmds, cmd)
-		m.mediaHandler.OnVolume()
+		if m.mediaHandler != nil {
+			m.mediaHandler.OnVolume(m.tracker.Volume())
+		}
 	case mediaShuffleMsg:
+		if !msg.on {
+			m.shuffleOn = false
+			if m.mediaHandler != nil {
+				m.mediaHandler.OnShuffle(false)
+			}
+			break
+		}
 		items := m.playlists.Items()
 		if m.currentPlaylistIndex >= 0 && m.currentPlaylistIndex < len(items) {
 			currentPlaylist := items[m.currentPlaylistIndex]
@@ -395,6 +414,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
+	case mediaOpenUriMsg:
+		cmd = m.playLoadedTrackId(msg.trackId)
+		cmds = append(cmds, cmd)
 
 	// search control update
 	case search.Control:
@@ -534,10 +556,16 @@ func mediaPlaybackMsg(msg handler.Message) tea.Msg {
 		return tracker.VolumeTo(vol)
 	case handler.MSG_SET_SHUFFLE:
 		val, ok := msg.Arg.(bool)
-		if !ok || !val {
+		if !ok {
 			return nil
 		}
-		return mediaShuffleMsg{}
+		return mediaShuffleMsg{on: val}
+	case handler.MSG_OPEN_URI:
+		id, ok := msg.Arg.(string)
+		if !ok || id == "" {
+			return nil
+		}
+		return mediaOpenUriMsg{trackId: id}
 	default:
 		return nil
 	}
@@ -572,7 +600,7 @@ func (m *Model) answerMediaGet(msg handler.Message) {
 		}
 		m.mediaHandler.SendAnswer(state)
 	case handler.MSG_GET_SHUFFLE:
-		m.mediaHandler.SendAnswer(false)
+		m.mediaHandler.SendAnswer(m.shuffleOn)
 	case handler.MSG_GET_METADATA:
 		m.mediaHandler.SendAnswer(m.trackMetadata())
 	case handler.MSG_GET_VOLUME:

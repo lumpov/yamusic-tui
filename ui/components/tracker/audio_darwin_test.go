@@ -18,6 +18,23 @@ func TestDarwinBackendType(t *testing.T) {
 	}
 }
 
+func TestDarwinPlayerCurrentTimeBeforeQueue(t *testing.T) {
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(nil)), 0)
+	defer buf.Close()
+
+	w := &readWrapper{trackBuffer: buf}
+	p := newDarwinPlayer(w)
+	defer p.Close()
+
+	got, ok := p.CurrentTime()
+	if !ok {
+		t.Fatal("CurrentTime must report playhead before queue start")
+	}
+	if got != 0 {
+		t.Fatalf("got %s, want 0", got)
+	}
+}
+
 func TestDarwinPlayerOpenCloseWithoutPlay(t *testing.T) {
 	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(nil)), 0)
 	defer buf.Close()

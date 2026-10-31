@@ -753,12 +753,18 @@ func parseLRCText(lrcContent string) []LyricPair {
 			continue
 		}
 
-		minutes, _ := strconv.Atoi(timeParts[0])
+		minutes, err := strconv.Atoi(timeParts[0])
+		if err != nil {
+			continue
+		}
 		secondsParts := strings.Split(timeParts[1], ".")
-		seconds, _ := strconv.Atoi(secondsParts[0])
+		seconds, err := strconv.Atoi(secondsParts[0])
+		if err != nil {
+			continue
+		}
 		millis := 0
 		if len(secondsParts) > 1 {
-			millis, _ = strconv.Atoi(secondsParts[1])
+			millis = lrcFractionMs(secondsParts[1])
 		}
 
 		totalMs := minutes*60*1000 + seconds*1000 + millis
@@ -776,4 +782,22 @@ func parseLRCText(lrcContent string) []LyricPair {
 	}
 
 	return lyrics
+}
+
+func lrcFractionMs(frac string) int {
+	n, err := strconv.Atoi(frac)
+	if err != nil || n < 0 {
+		return 0
+	}
+	switch len(frac) {
+	case 1:
+		return n * 100
+	case 2:
+		return n * 10
+	default:
+		if len(frac) > 3 {
+			n, _ = strconv.Atoi(frac[:3])
+		}
+		return n
+	}
 }

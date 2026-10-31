@@ -72,3 +72,49 @@ func TestUnsyncedLyricsIndexFollowsProgress(t *testing.T) {
 		t.Fatalf("idx=%d, want 4", idx)
 	}
 }
+
+func TestSyncedLyricsIndexUsesStartTimestamp(t *testing.T) {
+	config.InitTest(t)
+	m := NewForTest()
+	m.lyrics = []api.LyricPair{
+		{Timestamp: 10000, Line: "one"},
+		{Timestamp: 20000, Line: "two"},
+		{Timestamp: 30000, Line: "three"},
+	}
+	if idx := m.syncedLyricsIndex(0); idx != -1 {
+		t.Fatalf("before first: idx=%d", idx)
+	}
+	if idx := m.syncedLyricsIndex(10000); idx != 0 {
+		t.Fatalf("at first: idx=%d", idx)
+	}
+	if idx := m.syncedLyricsIndex(25000); idx != 1 {
+		t.Fatalf("mid second: idx=%d", idx)
+	}
+	if idx := m.syncedLyricsIndex(90000); idx != 2 {
+		t.Fatalf("after last: idx=%d", idx)
+	}
+}
+
+func TestRenderLyricsKeepsLastLineAfterLastTimestamp(t *testing.T) {
+	config.InitTest(t)
+	data := bytes.Repeat([]byte("x"), 100)
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(data)), int64(len(data)))
+	defer buf.Close()
+	if _, err := buf.Seek(90, io.SeekStart); err != nil {
+		t.Fatal(err)
+	}
+	m := NewForTest()
+	m.width = 80
+	m.showLyrics = true
+	m.player = &fakePlayer{playing: true}
+	m.track = api.Track{DurationMs: 100000}
+	m.trackWrapper = &readWrapper{trackBuffer: buf}
+	m.lyrics = []api.LyricPair{
+		{Timestamp: 1000, Line: "one"},
+		{Timestamp: 2000, Line: "final-line"},
+	}
+	got := m.renderLyrics()
+	if !strings.Contains(got, "final-line") {
+		t.Fatalf("last line must stay, got %q", got)
+	}
+}

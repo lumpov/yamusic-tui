@@ -699,13 +699,17 @@ func (m *Model) renderLyrics() string {
 		if len(m.lyrics) == 0 {
 			currentLine = "No lyrics for this track"
 		} else if m.lyricsHaveTimestamps() {
-			for idx, line := range m.lyrics {
-				if line.Timestamp > int(m.Position().Milliseconds()-1000) {
-					previousLine = m.tryGetLyricsLine(idx - 2)
-					currentLine = m.lyricsBreak(m.tryGetLyricsLine(idx - 1))
-					nextLine = m.tryGetLyricsLine(idx)
-					break
-				}
+			nowMs := 0
+			if m.trackWrapper != nil {
+				nowMs = int(m.Position().Milliseconds())
+			}
+			idx := m.syncedLyricsIndex(nowMs)
+			if idx >= 0 {
+				previousLine = m.tryGetLyricsLine(idx - 1)
+				currentLine = m.lyricsBreak(m.tryGetLyricsLine(idx))
+				nextLine = m.tryGetLyricsLine(idx + 1)
+			} else {
+				nextLine = m.tryGetLyricsLine(0)
 			}
 		} else {
 			idx := m.unsyncedLyricsIndex()
@@ -732,6 +736,18 @@ func (m *Model) lyricsHaveTimestamps() bool {
 		}
 	}
 	return false
+}
+
+func (m *Model) syncedLyricsIndex(nowMs int) int {
+	currentIdx := -1
+	bestTs := -1
+	for idx, line := range m.lyrics {
+		if line.Timestamp <= nowMs && line.Timestamp >= bestTs {
+			bestTs = line.Timestamp
+			currentIdx = idx
+		}
+	}
+	return currentIdx
 }
 
 func (m *Model) unsyncedLyricsIndex() int {

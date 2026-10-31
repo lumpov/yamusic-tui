@@ -13,8 +13,24 @@ func TestParseLRCTextSynced(t *testing.T) {
 	if got[0].Timestamp != 1000 || got[0].Line != "one" {
 		t.Fatalf("first=%v", got[0])
 	}
-	if got[1].Timestamp != 2050 || got[1].Line != "two" {
+	if got[1].Timestamp != 2500 || got[1].Line != "two" {
 		t.Fatalf("second=%v", got[1])
+	}
+}
+
+func TestParseLRCTextFractionDigits(t *testing.T) {
+	if got := parseLRCText("[00:00.5]a\n"); len(got) != 1 || got[0].Timestamp != 500 {
+		t.Fatalf("one digit: %v", got)
+	}
+	if got := parseLRCText("[00:00.500]b\n"); len(got) != 1 || got[0].Timestamp != 500 {
+		t.Fatalf("three digits: %v", got)
+	}
+}
+
+func TestParseLRCTextSkipsTags(t *testing.T) {
+	got := parseLRCText("[ar:Queen]\n[offset:500]\n[00:01.00]one\n")
+	if len(got) != 1 || got[0].Line != "one" || got[0].Timestamp != 1000 {
+		t.Fatalf("got=%v", got)
 	}
 }
 

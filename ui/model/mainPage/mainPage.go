@@ -48,6 +48,8 @@ type Model struct {
 	playQueue            []api.Track
 	playQueueTrackIndex  int
 	playGen              int
+	likeGen              int
+	playlistGen          int
 	currentPlaylistIndex int
 	currentAlbumIndex    int
 
@@ -149,6 +151,14 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case handler.Message:
 		m.answerMediaGet(msg)
 		return m, nil
+	case likeReadyMsg:
+		return m, m.applyLike(msg)
+	case addPlaylistReadyMsg:
+		return m, m.applyAddPlaylist(msg)
+	case renamePlaylistReadyMsg:
+		return m, m.applyRenamePlaylist(msg)
+	case removePlaylistReadyMsg:
+		return m, m.applyRemovePlaylist(msg)
 
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)

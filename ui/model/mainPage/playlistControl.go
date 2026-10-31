@@ -16,6 +16,40 @@ import (
 	"github.com/dece2183/yamusic-tui/ui/style"
 )
 
+type addPlaylistReadyMsg struct {
+	gen           int
+	errBanner     string
+	created       *playlist.Item
+	insertIndex   int
+	foundIndex    int
+	bumpSelect    bool
+	bumpCurrent   bool
+	sameKind      bool
+	addedRevision int
+	track         api.Track
+}
+
+type renamePlaylistReadyMsg struct {
+	gen      int
+	err      error
+	title    string
+	revision int
+	index    int
+}
+
+type removePlaylistReadyMsg struct {
+	gen           int
+	errBanner     string
+	removeWhole   bool
+	listIndex     int
+	revision      int
+	tracks        []api.Track
+	selectedTrack int
+	currentTrack  int
+	deleteCurrent bool
+	playingSame   bool
+}
+
 func (m *Model) addPlaylistControl(msg search.Control) tea.Cmd {
 	var cmd tea.Cmd
 
@@ -48,54 +82,74 @@ func (m *Model) addPlaylistControl(msg search.Control) tea.Cmd {
 			}
 		}
 
-		if foundPlaylist == nil {
-			pl, err := m.client.CreatePlaylist(inputVal, true)
+		trackIndex := m.tracklist.Index()
+		if trackIndex < 0 || trackIndex >= len(selectedPlaylist.Tracks) {
+			return nil
+		}
+		selectedTrack := selectedPlaylist.Tracks[trackIndex]
+		selectedKind := selectedPlaylist.Kind
+		playlistsIndex := m.playlists.Index()
+		currentIndex := m.currentPlaylistIndex
+		needCreate := foundPlaylist == nil
+		var foundKind uint64
+		var foundRevision int
+		var foundName string
+		var foundLen int
+		if foundPlaylist != nil {
+			foundKind = foundPlaylist.Kind
+			foundRevision = foundPlaylist.Revision
+			foundName = foundPlaylist.Name
+			foundLen = len(foundPlaylist.Tracks)
+		}
+
+		m.playlistGen++
+		gen := m.playlistGen
+		client := m.client
+		return func() tea.Msg {
+			if client == nil {
+				return addPlaylistReadyMsg{gen: gen, errBanner: "playlist add"}
+			}
+			msg := addPlaylistReadyMsg{
+				gen:         gen,
+				insertIndex: foundPlaylistIndex,
+				foundIndex:  foundPlaylistIndex,
+				track:       selectedTrack,
+			}
+			if needCreate {
+				pl, err := client.CreatePlaylist(inputVal, true)
+				if err != nil {
+					log.Print(log.LVL_ERROR, "failed to create playlist [%s]: %s", inputVal, err)
+					return addPlaylistReadyMsg{gen: gen, errBanner: "playlist create"}
+				}
+				msg.created = &playlist.Item{
+					Name:     pl.Title,
+					Kind:     pl.Kind,
+					Revision: pl.Revision,
+					Active:   true,
+					Subitem:  true,
+				}
+				foundKind = pl.Kind
+				foundRevision = pl.Revision
+				foundName = pl.Title
+				foundLen = 0
+				msg.bumpSelect = foundPlaylistIndex < playlistsIndex
+				msg.bumpCurrent = currentIndex >= playlistsIndex
+			}
+			if selectedKind == foundKind {
+				msg.sameKind = true
+				return msg
+			}
+			pl, err := client.AddToPlaylist(foundKind, foundRevision, foundLen, selectedTrack.Id)
 			if err != nil {
-				log.Print(log.LVL_ERROR, "failed to create playlist [%s]: %s", inputVal, err)
-				m.tracker.ShowError("playlist create")
-				return nil
+				log.Print(log.LVL_ERROR, "failed to add track [%s] to playlist [%s]: %s", selectedTrack.Id, foundName, err)
+				return addPlaylistReadyMsg{gen: gen, errBanner: "playlist add", created: msg.created, insertIndex: msg.insertIndex, bumpSelect: msg.bumpSelect, bumpCurrent: msg.bumpCurrent}
 			}
-
-			foundPlaylist = &playlist.Item{
-				Name:     pl.Title,
-				Kind:     pl.Kind,
-				Revision: pl.Revision,
-				Active:   true,
-				Subitem:  true,
+			msg.addedRevision = pl.Revision
+			if !needCreate {
+				msg.foundIndex = foundPlaylistIndex
 			}
-
-			m.playlists.InsertItem(foundPlaylistIndex, foundPlaylist)
-			if foundPlaylistIndex < m.playlists.Index() {
-				m.playlists.Select(m.playlists.Index() + 1)
-			}
-			if m.currentPlaylistIndex >= m.playlists.Index() {
-				m.currentPlaylistIndex += 1
-			}
+			return msg
 		}
-
-		if selectedPlaylist.Kind == foundPlaylist.Kind {
-			return nil
-		}
-
-		selectedTrack := &selectedPlaylist.Tracks[m.tracklist.Index()]
-		pl, err := m.client.AddToPlaylist(foundPlaylist.Kind, foundPlaylist.Revision, len(foundPlaylist.Tracks), selectedTrack.Id)
-		if err != nil {
-			log.Print(log.LVL_ERROR, "failed to add track [%s] to playlist [%s]: %s", selectedTrack.Id, foundPlaylist.Name, err)
-			m.tracker.ShowError("playlist add")
-			return nil
-		}
-
-		foundPlaylist.Revision = pl.Revision
-		foundPlaylist.Tracks = append(foundPlaylist.Tracks, *selectedTrack)
-		cmd = m.playlists.SetItem(foundPlaylistIndex, foundPlaylist)
-
-		if m.currentPlaylistIndex >= 0 && foundPlaylist.IsSame(m.playlists.Items()[m.currentPlaylistIndex]) {
-			m.playQueue = foundPlaylist.Tracks
-			m.playQueueTrackIndex = foundPlaylist.CurrentTrack
-			m.indicateCurrentTrackPlaying(m.tracker.IsPlaying())
-		}
-
-		m.isAddPlaylistActive = false
 	case search.CANCEL:
 		m.isAddPlaylistActive = false
 	case search.UPDATE_SUGGESTIONS:
@@ -114,9 +168,50 @@ func (m *Model) addPlaylistControl(msg search.Control) tea.Cmd {
 	return cmd
 }
 
-func (m *Model) renamePlaylistControl(msg input.Control) tea.Cmd {
-	var cmd tea.Cmd
+func (m *Model) applyAddPlaylist(msg addPlaylistReadyMsg) tea.Cmd {
+	if msg.gen != m.playlistGen {
+		return nil
+	}
+	if msg.errBanner != "" && msg.created == nil {
+		m.tracker.ShowError(msg.errBanner)
+		return nil
+	}
 
+	foundIndex := msg.foundIndex
+	if msg.created != nil {
+		m.playlists.InsertItem(msg.insertIndex, msg.created)
+		if msg.bumpSelect {
+			m.playlists.Select(m.playlists.Index() + 1)
+		}
+		if msg.bumpCurrent {
+			m.currentPlaylistIndex += 1
+		}
+		foundIndex = msg.insertIndex
+	}
+	if msg.errBanner != "" {
+		m.tracker.ShowError(msg.errBanner)
+		return nil
+	}
+	if msg.sameKind {
+		return nil
+	}
+	items := m.playlists.Items()
+	if foundIndex < 0 || foundIndex >= len(items) {
+		return nil
+	}
+	foundPlaylist := items[foundIndex]
+	foundPlaylist.Revision = msg.addedRevision
+	foundPlaylist.Tracks = append(foundPlaylist.Tracks, msg.track)
+	cmd := m.playlists.SetItem(foundIndex, foundPlaylist)
+	if m.currentPlaylistIndex >= 0 && foundPlaylist.IsSame(items[m.currentPlaylistIndex]) {
+		m.playQueue = foundPlaylist.Tracks
+		m.playQueueTrackIndex = foundPlaylist.CurrentTrack
+		m.indicateCurrentTrackPlaying(m.tracker.IsPlaying())
+	}
+	return cmd
+}
+
+func (m *Model) renamePlaylistControl(msg input.Control) tea.Cmd {
 	if msg != input.APPLY {
 		return nil
 	}
@@ -127,21 +222,41 @@ func (m *Model) renamePlaylistControl(msg input.Control) tea.Cmd {
 	}
 
 	selectedPlaylist := m.playlists.SelectedItem()
-	if selectedPlaylist == nil {
+	if selectedPlaylist == nil || m.client == nil {
 		return nil
 	}
-	pl, err := m.client.RenamePlaylist(selectedPlaylist.Kind, newName)
-	if err != nil {
-		log.Print(log.LVL_ERROR, "failed to rename playlist [%s] to '%s': %s", selectedPlaylist.Name, newName, err)
+	kind := selectedPlaylist.Kind
+	oldName := selectedPlaylist.Name
+	index := m.playlists.Index()
+	m.playlistGen++
+	gen := m.playlistGen
+	client := m.client
+	return func() tea.Msg {
+		pl, err := client.RenamePlaylist(kind, newName)
+		if err != nil {
+			log.Print(log.LVL_ERROR, "failed to rename playlist [%s] to '%s': %s", oldName, newName, err)
+			return renamePlaylistReadyMsg{gen: gen, err: err}
+		}
+		return renamePlaylistReadyMsg{gen: gen, title: pl.Title, revision: pl.Revision, index: index}
+	}
+}
+
+func (m *Model) applyRenamePlaylist(msg renamePlaylistReadyMsg) tea.Cmd {
+	if msg.gen != m.playlistGen {
+		return nil
+	}
+	if msg.err != nil {
 		m.tracker.ShowError("playlist rename")
 		return nil
 	}
-
-	selectedPlaylist.Name = pl.Title
-	selectedPlaylist.Revision = pl.Revision
-	m.playlists.SetItem(m.playlists.Index(), selectedPlaylist)
-
-	return cmd
+	items := m.playlists.Items()
+	if msg.index < 0 || msg.index >= len(items) {
+		return nil
+	}
+	selectedPlaylist := items[msg.index]
+	selectedPlaylist.Name = msg.title
+	selectedPlaylist.Revision = msg.revision
+	return m.playlists.SetItem(msg.index, selectedPlaylist)
 }
 
 func (m *Model) removeFromPlaylist(pl *playlist.Item, index int) tea.Cmd {
@@ -159,60 +274,99 @@ func (m *Model) removeFromPlaylist(pl *playlist.Item, index int) tea.Cmd {
 		selectedTrack := pl.Tracks[index]
 		return m.removeCache(&selectedTrack)
 	default:
-		var cmd tea.Cmd
-
-		if len(pl.Tracks) < 2 {
-			err := m.client.RemovePlaylist(pl.Kind)
+		kind := pl.Kind
+		revision := pl.Revision
+		name := pl.Name
+		trackId := pl.Tracks[index].Id
+		listIndex := m.playlists.Index()
+		removeWhole := len(pl.Tracks) < 2
+		playingSame := m.currentPlaylistIndex >= 0 && pl.IsSame(m.playlists.Items()[m.currentPlaylistIndex])
+		currentTrack := pl.CurrentTrack
+		m.playlistGen++
+		gen := m.playlistGen
+		client := m.client
+		return func() tea.Msg {
+			if client == nil {
+				return removePlaylistReadyMsg{gen: gen, errBanner: "playlist remove"}
+			}
+			if removeWhole {
+				err := client.RemovePlaylist(kind)
+				if err != nil {
+					log.Print(log.LVL_ERROR, "failed to remove playlist [%s]: %s", name, err)
+					return removePlaylistReadyMsg{gen: gen, errBanner: "playlist remove"}
+				}
+				return removePlaylistReadyMsg{gen: gen, removeWhole: true, listIndex: listIndex}
+			}
+			newpl, err := client.RemoveFromPlaylist(kind, revision, index)
 			if err != nil {
-				log.Print(log.LVL_ERROR, "failed to remove playlist [%s]: %s", pl.Name, err)
-				m.tracker.ShowError("playlist remove")
-				return nil
+				log.Print(log.LVL_ERROR, "failed to remove track [%s] from playlist [%s]: %s", trackId, name, err)
+				return removePlaylistReadyMsg{gen: gen, errBanner: "playlist remove track"}
 			}
-			if m.currentPlaylistIndex >= m.playlists.Index() {
-				m.currentPlaylistIndex -= 1
+			tracks := slices.Delete(append([]api.Track(nil), pl.Tracks...), index, index+1)
+			selected := index
+			if selected >= len(tracks) {
+				selected = len(tracks) - 1
 			}
-			m.playlists.RemoveItem(m.playlists.Index())
-			if len(m.playlists.Items()) <= m.playlists.Index() {
-				m.playlists.Select(0)
+			deleteCurrent := index == currentTrack
+			cur := currentTrack
+			if deleteCurrent {
+				cur = -1
+			} else if currentTrack > index {
+				cur--
 			}
-			m.displayPlaylist(m.playlists.SelectedItem())
-			return nil
-		}
-
-		newpl, err := m.client.RemoveFromPlaylist(pl.Kind, pl.Revision, index)
-		if err != nil {
-			log.Print(log.LVL_ERROR, "failed to remove track [%s] from playlist [%s]: %s", pl.Tracks[index].Id, pl.Name, err)
-			m.tracker.ShowError("playlist remove track")
-			return nil
-		}
-
-		pl.Revision = newpl.Revision
-		pl.Tracks = slices.Delete(pl.Tracks, index, index+1)
-		if index >= len(pl.Tracks) {
-			pl.SelectedTrack = len(pl.Tracks) - 1
-		} else {
-			pl.SelectedTrack = index
-		}
-		deleteCurrentTrack := index == pl.CurrentTrack
-		if deleteCurrentTrack {
-			pl.CurrentTrack = -1
-		} else if pl.CurrentTrack > index {
-			pl.CurrentTrack--
-		}
-		cmd = m.playlists.SetItem(m.playlists.Index(), pl)
-		m.displayPlaylist(pl)
-
-		if m.currentPlaylistIndex >= 0 && pl.IsSame(m.playlists.Items()[m.currentPlaylistIndex]) {
-			m.playQueue = pl.Tracks
-			if deleteCurrentTrack {
-				m.playQueueTrackIndex -= 1
-			} else {
-				m.playQueueTrackIndex = pl.CurrentTrack
+			return removePlaylistReadyMsg{
+				gen:           gen,
+				listIndex:     listIndex,
+				revision:      newpl.Revision,
+				tracks:        tracks,
+				selectedTrack: selected,
+				currentTrack:  cur,
+				deleteCurrent: deleteCurrent,
+				playingSame:   playingSame,
 			}
 		}
-
-		return cmd
 	}
+}
+
+func (m *Model) applyRemovePlaylist(msg removePlaylistReadyMsg) tea.Cmd {
+	if msg.gen != m.playlistGen {
+		return nil
+	}
+	if msg.errBanner != "" {
+		m.tracker.ShowError(msg.errBanner)
+		return nil
+	}
+	if msg.removeWhole {
+		if m.currentPlaylistIndex >= msg.listIndex {
+			m.currentPlaylistIndex -= 1
+		}
+		m.playlists.RemoveItem(msg.listIndex)
+		if len(m.playlists.Items()) <= m.playlists.Index() {
+			m.playlists.Select(0)
+		}
+		m.displayPlaylist(m.playlists.SelectedItem())
+		return nil
+	}
+	items := m.playlists.Items()
+	if msg.listIndex < 0 || msg.listIndex >= len(items) {
+		return nil
+	}
+	pl := items[msg.listIndex]
+	pl.Revision = msg.revision
+	pl.Tracks = msg.tracks
+	pl.SelectedTrack = msg.selectedTrack
+	pl.CurrentTrack = msg.currentTrack
+	cmd := m.playlists.SetItem(msg.listIndex, pl)
+	m.displayPlaylist(pl)
+	if msg.playingSame {
+		m.playQueue = pl.Tracks
+		if msg.deleteCurrent {
+			m.playQueueTrackIndex -= 1
+		} else {
+			m.playQueueTrackIndex = pl.CurrentTrack
+		}
+	}
+	return cmd
 }
 
 func (m *Model) shufflePlaylist(pl *playlist.Item) tea.Cmd {

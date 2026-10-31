@@ -7,6 +7,16 @@ import (
 	"github.com/dece2183/yamusic-tui/ui/components/playlist"
 )
 
+type likeReadyMsg struct {
+	gen          int
+	track        api.Track
+	unlike       bool
+	err          error
+	likesIndex   int
+	rotorSession string
+	rotorBatch   string
+}
+
 func (m *Model) likePlayingTrack() tea.Cmd {
 	var currentPlaylist *playlist.Item
 	if m.currentPlaylistIndex >= 0 {
@@ -40,27 +50,69 @@ func (m *Model) likeTrack(track *api.Track, pl *playlist.Item) tea.Cmd {
 		return nil
 	}
 
-	var evType api.TrackEventType
-	if m.likedTracksMap[track.Id] {
-		if m.client.UnlikeTrack(track.Id) != nil {
-			return nil
+	m.likeGen++
+	gen := m.likeGen
+	unlike := m.likedTracksMap[track.Id]
+	trackCopy := *track
+	var rotorSession, rotorBatch string
+	if pl != nil && pl.Rotor {
+		rotorSession = pl.SessionId
+		rotorBatch = pl.SessionBatch
+	}
+	client := m.client
+	return func() tea.Msg {
+		var err error
+		if unlike {
+			err = client.UnlikeTrack(trackCopy.Id)
+		} else {
+			err = client.LikeTrack(trackCopy.Id)
 		}
-		delete(m.likedTracksMap, track.Id)
-		likedPlaylist.RemoveTrack(track.Id)
-		evType = api.EV_TRACK_UNLIKED
-	} else {
-		if m.client.LikeTrack(track.Id) != nil {
-			return nil
+		return likeReadyMsg{
+			gen:          gen,
+			track:        trackCopy,
+			unlike:       unlike,
+			err:          err,
+			likesIndex:   index,
+			rotorSession: rotorSession,
+			rotorBatch:   rotorBatch,
 		}
-		m.likedTracksMap[track.Id] = true
-		likedPlaylist.AddTrack(track)
-		evType = api.EV_TRACK_LIKED
+	}
+}
+
+func (m *Model) applyLike(msg likeReadyMsg) tea.Cmd {
+	if msg.gen != m.likeGen {
+		return nil
+	}
+	if msg.err != nil {
+		m.tracker.ShowError("like")
+		return nil
 	}
 
-	if pl != nil && pl.Rotor {
-		ev := api.NewTrackFeedbackEvent(evType, track, 0)
-		go m.client.RotorSessionFeedback(pl.SessionId, api.NewFeedback(pl.SessionBatch, ev))
-		log.Print(log.LVL_INFO, "feedback event sended: "+ev.Type+" track: "+track.Title)
+	likedPlaylist, index := m.playlists.GetFirst(playlist.LIKES)
+	if likedPlaylist == nil || index < 0 {
+		index = msg.likesIndex
+		if index < 0 || index >= len(m.playlists.Items()) {
+			return nil
+		}
+		likedPlaylist = m.playlists.Items()[index]
+	}
+
+	if msg.unlike {
+		delete(m.likedTracksMap, msg.track.Id)
+		likedPlaylist.RemoveTrack(msg.track.Id)
+	} else {
+		m.likedTracksMap[msg.track.Id] = true
+		likedPlaylist.AddTrack(&msg.track)
+	}
+
+	if msg.rotorSession != "" && m.client != nil {
+		evType := api.EV_TRACK_LIKED
+		if msg.unlike {
+			evType = api.EV_TRACK_UNLIKED
+		}
+		ev := api.NewTrackFeedbackEvent(evType, &msg.track, 0)
+		go m.client.RotorSessionFeedback(msg.rotorSession, api.NewFeedback(msg.rotorBatch, ev))
+		log.Print(log.LVL_INFO, "feedback event sended: "+ev.Type+" track: "+msg.track.Title)
 	}
 
 	cmd := m.playlists.SetItem(index, likedPlaylist)

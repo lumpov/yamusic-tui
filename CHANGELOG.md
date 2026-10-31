@@ -25,6 +25,7 @@
 
 ### Исправлено
 
+- Лайк и операции с плейлистами (создать, добавить трек, переименовать, удалить) больше не вызывают HTTP из `Update`. Сеть идёт в `tea.Cmd`, `Update` применяет готовый результат.
 - Darwin Touch Bar / Now Playing: `OnPlayPause` ставит `PlaybackRate` 1 или 0, `OnSeek` — `ElapsedPlaybackTime`, не затирая название трека. `Update` сообщает состояние после Pause/Play ([#25](https://github.com/lumpov/yamusic-tui/pull/25)).
 - Windows SMTC: `OnEnded` ставит `MediaPlaybackStatusStopped` ([#25](https://github.com/lumpov/yamusic-tui/pull/25)).
 - Чтение закрытого HTTP-тела после полного буфера — `io.EOF`, без `mp3 decoding error` ([#25](https://github.com/lumpov/yamusic-tui/pull/25)).

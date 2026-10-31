@@ -25,7 +25,7 @@
 
 ### Исправлено
 
-- Громкость и показ текста песни больше не пишут `config.yaml` из `Update`. `config.Save` идёт в `tea.Cmd`.
+- Громкость и показ текста песни больше не пишут `config.yaml` из `Update`. `config.Save` идёт в `tea.Cmd` ([#29](https://github.com/lumpov/yamusic-tui/pull/29)).
 - Клавиша кэша больше не вызывает `BufferAll` из `Update`: докачка хвоста HTTP и запись файла идут в `tea.Cmd` ([#28](https://github.com/lumpov/yamusic-tui/pull/28)).
 - Сохранение и удаление кэша трека больше не делают диск из `Update`. Запись и `cache.Remove` идут в `tea.Cmd`. `BufferedStream.WriteTo` копирует снимок буфера и отпускает `mux` до записи на диск ([#27](https://github.com/lumpov/yamusic-tui/pull/27)).
 - Лайк и операции с плейлистами (создать, добавить трек, переименовать, удалить) больше не вызывают HTTP из `Update`. Сеть идёт в `tea.Cmd`, `Update` применяет готовый результат ([#26](https://github.com/lumpov/yamusic-tui/pull/26)).

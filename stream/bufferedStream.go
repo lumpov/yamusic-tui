@@ -281,8 +281,9 @@ func (h *BufferedStream) BufferAll() {
 
 func (h *BufferedStream) WriteTo(dest io.Writer) (int64, error) {
 	h.mux.Lock()
-	defer h.mux.Unlock()
-	n, err := dest.Write(h.readBuffer)
+	snap := append([]byte(nil), h.readBuffer...)
+	h.mux.Unlock()
+	n, err := dest.Write(snap)
 	return int64(n), err
 }
 

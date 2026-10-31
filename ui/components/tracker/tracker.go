@@ -58,6 +58,7 @@ type VolumeTo float64
 
 type rewindSettleMsg uint64
 type volumeFadeTickMsg struct{}
+type configSavedMsg struct{}
 
 type Model struct {
 	width      int
@@ -280,16 +281,13 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 			}
 
 		case controls.PlayerVolUp.Contains(keypress):
-			m.SetVolume(m.volume + m.dynamicVolumeStep())
-			cmds = append(cmds, model.Cmd(VOLUME))
+			cmds = append(cmds, m.SetVolume(m.volume+m.dynamicVolumeStep()), model.Cmd(VOLUME))
 
 		case controls.PlayerVolDown.Contains(keypress):
-			m.SetVolume(m.volume - m.dynamicVolumeStep())
-			cmds = append(cmds, model.Cmd(VOLUME))
+			cmds = append(cmds, m.SetVolume(m.volume-m.dynamicVolumeStep()), model.Cmd(VOLUME))
 
 		case controls.PlayerToggleLyrics.Contains(keypress):
-			m.SetLirycs(!m.showLyrics)
-			cmds = append(cmds, model.Cmd(TOGGLE_LYRICS))
+			cmds = append(cmds, m.SetLirycs(!m.showLyrics), model.Cmd(TOGGLE_LYRICS))
 		case controls.PlayerHide.Contains(keypress):
 			m.Hidden = !m.Hidden
 			cmds = append(cmds, model.Cmd(TOGGLE_VIEW))
@@ -320,7 +318,7 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 		m.SetPos(time.Duration(msg))
 
 	case VolumeTo:
-		m.SetVolume(float64(msg))
+		cmds = append(cmds, m.SetVolume(float64(msg)))
 
 	case volumeFadeTickMsg:
 		m.volumeFadeTick()
@@ -373,7 +371,16 @@ func (m *Model) Position() time.Duration {
 	return time.Duration(float64(m.track.DurationMs)*m.trackWrapper.Progress()) * time.Millisecond
 }
 
-func (m *Model) SetVolume(v float64) {
+func saveConfigCmd() tea.Cmd {
+	return func() tea.Msg {
+		if err := config.Save(); err != nil {
+			log.Print(log.LVL_ERROR, "failed to save config: %s", err)
+		}
+		return configSavedMsg{}
+	}
+}
+
+func (m *Model) SetVolume(v float64) tea.Cmd {
 	if v < _VOLUME_SNAP_THRESHOLD {
 		v = 0
 	} else if v > 1-_VOLUME_SNAP_THRESHOLD {
@@ -382,13 +389,13 @@ func (m *Model) SetVolume(v float64) {
 	m.volume = v
 	m.volumeIncremet = m.volume / _VOLUME_FADE_STEPS
 	config.Current.Volume = m.volume
-	config.Save()
+	return saveConfigCmd()
 }
 
-func (m *Model) SetLirycs(show bool) {
+func (m *Model) SetLirycs(show bool) tea.Cmd {
 	m.showLyrics = show
 	config.Current.ShowLyrics = m.showLyrics
-	config.Save()
+	return saveConfigCmd()
 }
 
 func (m *Model) Volume() float64 {

@@ -1,7 +1,9 @@
 package tracker
 
 import (
+	"errors"
 	"io"
+	"net/http"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -62,9 +64,13 @@ func (w *readWrapper) Read(dest []byte) (n int, err error) {
 			w.send(STOP)
 			return
 		}
-		log.Print(log.LVL_WARNIGN, "mp3 decoding error: %s", err)
-		playbacktrace.Event("read wrapper decode err=%v", err)
-		err = nil
+		if errors.Is(err, http.ErrBodyReadAfterClose) || errors.Is(err, io.ErrClosedPipe) {
+			err = io.EOF
+		} else {
+			log.Print(log.LVL_WARNIGN, "mp3 decoding error: %s", err)
+			playbacktrace.Event("read wrapper decode err=%v", err)
+			err = nil
+		}
 	}
 
 	w.afterRead()

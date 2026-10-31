@@ -146,6 +146,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case searchResultsReadyMsg:
 		return m, m.applySearchResults(msg)
+	case handler.Message:
+		m.answerMediaGet(msg)
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)
@@ -323,17 +326,11 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.tracker.IsStoped() {
 				cmd = m.playSelected()
 				cmds = append(cmds, cmd)
-			} else {
-				m.mediaHandler.OnPlayPause()
 			}
-		case tracker.PAUSE:
-			m.mediaHandler.OnPlayPause()
 		case tracker.PLAYPAUSE:
 			if m.tracker.IsStoped() {
 				cmd = m.playSelected()
 				cmds = append(cmds, cmd)
-			} else {
-				m.mediaHandler.OnPlayPause()
 			}
 		case tracker.STOP:
 			m.mediaHandler.OnEnded()
@@ -355,6 +352,12 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.tracker, cmd = m.tracker.Update(message)
 		cmds = append(cmds, cmd)
 		m.indicateCurrentTrackPlaying(m.tracker.IsPlaying())
+		switch msg {
+		case tracker.PLAY, tracker.PAUSE, tracker.PLAYPAUSE:
+			if m.mediaHandler != nil && !m.tracker.IsStoped() {
+				m.mediaHandler.OnPlayPause(m.tracker.IsPlaying())
+			}
+		}
 
 	case tracker.SeekBy:
 		m.tracker, cmd = m.tracker.Update(message)
@@ -532,58 +535,73 @@ func (m *Model) mediaHandle() {
 			continue
 		}
 		switch msg.Type {
-		case handler.MSG_GET_PLAYBACKSTATUS:
-			var state handler.PlaybackState
-			if m.tracker.IsPlaying() {
-				state = handler.STATE_PLAYING
-			} else {
-				if m.tracker.IsStoped() {
-					state = handler.STATE_STOPED
-				} else {
-					state = handler.STATE_PAUSED
-				}
-			}
-			m.mediaHandler.SendAnswer(state)
-		case handler.MSG_GET_SHUFFLE:
-			m.mediaHandler.SendAnswer(false)
-		case handler.MSG_GET_METADATA:
-			if m.tracker.IsStoped() {
-				m.mediaHandler.SendAnswer(handler.TrackMetadata{})
-				break
-			}
-			track := m.tracker.CurrentTrack()
-			artists := make([]string, 0, len(track.Artists))
-			for i := range track.Artists {
-				artists = append(artists, track.Artists[i].Name)
-			}
-			albumArtists := make([]string, 0)
-			var albumName string
-			genre := make([]string, 0)
-			if len(track.Albums) != 0 {
-				for i := range track.Albums[0].Artists {
-					albumArtists = append(albumArtists, track.Albums[0].Artists[i].Name)
-				}
-				albumName = track.Albums[0].Title
-				genre = append(genre, track.Albums[0].Genre)
-			}
-
-			md := handler.TrackMetadata{
-				TrackId:      track.Id,
-				Length:       time.Duration(track.DurationMs) * time.Millisecond,
-				CoverUrl:     m.coverFilePath(),
-				AlbumName:    albumName,
-				AlbumArtists: albumArtists,
-				Artists:      artists,
-				Genre:        genre,
-				Title:        track.Title,
-				Url:          api.ShareTrackLink(track),
-			}
-			m.mediaHandler.SendAnswer(md)
-		case handler.MSG_GET_VOLUME:
-			m.mediaHandler.SendAnswer(m.tracker.Volume())
-		case handler.MSG_GET_POSITION:
-			m.mediaHandler.SendAnswer(m.tracker.Position())
+		case handler.MSG_GET_PLAYBACKSTATUS, handler.MSG_GET_SHUFFLE, handler.MSG_GET_METADATA, handler.MSG_GET_VOLUME, handler.MSG_GET_POSITION:
+			m.Send(msg)
 		}
+	}
+}
+
+func (m *Model) answerMediaGet(msg handler.Message) {
+	if m.mediaHandler == nil {
+		return
+	}
+	switch msg.Type {
+	case handler.MSG_GET_PLAYBACKSTATUS:
+		var state handler.PlaybackState
+		if m.tracker.IsPlaying() {
+			state = handler.STATE_PLAYING
+		} else if m.tracker.IsStoped() {
+			state = handler.STATE_STOPED
+		} else {
+			state = handler.STATE_PAUSED
+		}
+		m.mediaHandler.SendAnswer(state)
+	case handler.MSG_GET_SHUFFLE:
+		m.mediaHandler.SendAnswer(false)
+	case handler.MSG_GET_METADATA:
+		m.mediaHandler.SendAnswer(m.trackMetadata())
+	case handler.MSG_GET_VOLUME:
+		m.mediaHandler.SendAnswer(m.tracker.Volume())
+	case handler.MSG_GET_POSITION:
+		m.mediaHandler.SendAnswer(m.tracker.Position())
+	}
+}
+
+func (m *Model) trackMetadata() handler.TrackMetadata {
+	if m.tracker == nil || m.tracker.IsStoped() {
+		return handler.TrackMetadata{}
+	}
+	return m.trackMetadataFrom(m.tracker.CurrentTrack())
+}
+
+func (m *Model) trackMetadataFrom(track *api.Track) handler.TrackMetadata {
+	if track == nil {
+		return handler.TrackMetadata{}
+	}
+	artists := make([]string, 0, len(track.Artists))
+	for i := range track.Artists {
+		artists = append(artists, track.Artists[i].Name)
+	}
+	albumArtists := make([]string, 0)
+	var albumName string
+	genre := make([]string, 0)
+	if len(track.Albums) != 0 {
+		for i := range track.Albums[0].Artists {
+			albumArtists = append(albumArtists, track.Albums[0].Artists[i].Name)
+		}
+		albumName = track.Albums[0].Title
+		genre = append(genre, track.Albums[0].Genre)
+	}
+	return handler.TrackMetadata{
+		TrackId:      track.Id,
+		Length:       time.Duration(track.DurationMs) * time.Millisecond,
+		CoverUrl:     m.coverFilePath(),
+		AlbumName:    albumName,
+		AlbumArtists: albumArtists,
+		Artists:      artists,
+		Genre:        genre,
+		Title:        track.Title,
+		Url:          api.ShareTrackLink(track),
 	}
 }
 

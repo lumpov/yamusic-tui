@@ -3,10 +3,18 @@ package tracker
 import (
 	"bytes"
 	"io"
+	"net/http"
 	"testing"
 
 	"github.com/dece2183/yamusic-tui/stream"
 )
+
+type errSeeker struct{ err error }
+
+func (e errSeeker) Read([]byte) (int, error) { return 0, e.err }
+func (e errSeeker) Seek(int64, int) (int64, error) {
+	return 0, nil
+}
 
 func TestReadWrapperProgressAndEOF(t *testing.T) {
 	data := bytes.Repeat([]byte{1}, 64)
@@ -28,6 +36,22 @@ func TestReadWrapperProgressAndEOF(t *testing.T) {
 	}
 	if w.Length() != int64(len(data)) {
 		t.Fatalf("length=%d", w.Length())
+	}
+}
+
+func TestReadWrapperClosedBodyIsEOF(t *testing.T) {
+	data := []byte{1, 2, 3}
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(data)), int64(len(data)))
+	defer buf.Close()
+
+	w := &readWrapper{
+		program:     nil,
+		source:      errSeeker{err: http.ErrBodyReadAfterClose},
+		trackBuffer: buf,
+	}
+	n, err := w.Read(make([]byte, 8))
+	if n != 0 || err != io.EOF {
+		t.Fatalf("n=%d err=%v", n, err)
 	}
 }
 

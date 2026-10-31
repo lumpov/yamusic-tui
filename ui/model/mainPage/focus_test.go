@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dece2183/yamusic-tui/config"
+	"github.com/dece2183/yamusic-tui/media/handler"
 	"github.com/dece2183/yamusic-tui/ui/components/tracker"
 	"github.com/dece2183/yamusic-tui/ui/style"
 	"github.com/muesli/termenv"
@@ -35,6 +36,9 @@ func TestSkipUIProgressWhenBlurred(t *testing.T) {
 	}
 	if skipUIProgress(false, tracker.PLAYPAUSE) {
 		t.Fatal("media playpause must not be skipped while blurred")
+	}
+	if skipUIProgress(false, handler.Message{Type: handler.MSG_GET_VOLUME}) {
+		t.Fatal("media GET must not be skipped while blurred")
 	}
 	if !skipUIProgress(false, spinner.TickMsg{}) {
 		t.Fatal("spinner frames must be skipped while blurred")

@@ -14,14 +14,14 @@ import (
 
 type stubMedia struct{}
 
-func (stubMedia) Start(func() error) error        { return nil }
-func (stubMedia) Message() <-chan handler.Message { return nil }
-func (stubMedia) SendAnswer(any)                  {}
-func (stubMedia) OnEnded()                        {}
-func (stubMedia) OnVolume()                       {}
-func (stubMedia) OnPlayback()                     {}
-func (stubMedia) OnPlayPause()                    {}
-func (stubMedia) OnSeek(time.Duration)            {}
+func (stubMedia) Start(func() error) error         { return nil }
+func (stubMedia) Message() <-chan handler.Message  { return nil }
+func (stubMedia) SendAnswer(any)                   {}
+func (stubMedia) OnEnded()                         {}
+func (stubMedia) OnVolume()                        {}
+func (stubMedia) OnPlayback(handler.TrackMetadata) {}
+func (stubMedia) OnPlayPause(bool)                 {}
+func (stubMedia) OnSeek(time.Duration)             {}
 
 func pausedPlaylistModel(t *testing.T) *Model {
 	t.Helper()

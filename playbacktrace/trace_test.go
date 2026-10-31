@@ -2,7 +2,24 @@ package playbacktrace
 
 import "testing"
 
+func TestDisabledIsNoop(t *testing.T) {
+	if Enabled {
+		t.Skip("Enabled")
+	}
+	Reset()
+	t.Cleanup(Reset)
+	Begin("1", "t")
+	Event("x")
+	Flush("stop")
+	if n := len(Snapshot()); n != 0 {
+		t.Fatalf("disabled n=%d", n)
+	}
+}
+
 func TestEventKeepsOrderAndCap(t *testing.T) {
+	if !Enabled {
+		t.Skip("Enabled")
+	}
 	Reset()
 	t.Cleanup(Reset)
 
@@ -17,6 +34,9 @@ func TestEventKeepsOrderAndCap(t *testing.T) {
 }
 
 func TestFlushClearsBuffer(t *testing.T) {
+	if !Enabled {
+		t.Skip("Enabled")
+	}
 	Reset()
 	t.Cleanup(Reset)
 	Begin("1", "t")

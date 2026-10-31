@@ -410,7 +410,7 @@ func (m *Model) applyPlayTrack(msg playTrackReadyMsg) {
 	playbacktrace.Event("load cache=%v size=%d", msg.fromCache, msg.buffer.Length())
 	m.indicateCurrentTrackPlaying(true)
 	if m.mediaHandler != nil {
-		m.mediaHandler.OnPlayback()
+		m.mediaHandler.OnPlayback(m.trackMetadataFrom(msg.track))
 	}
 
 	if m.client != nil {

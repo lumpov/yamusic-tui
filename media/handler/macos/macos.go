@@ -162,6 +162,33 @@ static void updateNowPlayingInfo(
     [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:info];
 }
 
+static void setNowPlayingPlaybackRate(int isPlaying) {
+    NSDictionary *current = [[MPNowPlayingInfoCenter defaultCenter] nowPlayingInfo];
+    NSMutableDictionary *info;
+    if (current != nil) {
+        info = [current mutableCopy];
+    } else {
+        info = [NSMutableDictionary dictionary];
+    }
+    info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? @(1.0) : @(0.0);
+    [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:info];
+}
+
+static void setNowPlayingElapsed(double elapsedSeconds) {
+    NSDictionary *current = [[MPNowPlayingInfoCenter defaultCenter] nowPlayingInfo];
+    NSMutableDictionary *info;
+    if (current != nil) {
+        info = [current mutableCopy];
+    } else {
+        info = [NSMutableDictionary dictionary];
+    }
+    if (elapsedSeconds < 0) {
+        elapsedSeconds = 0;
+    }
+    info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(elapsedSeconds);
+    [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:info];
+}
+
 static void clearNowPlayingInfo(void) {
     [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:nil];
 }
@@ -249,25 +276,17 @@ func (mh *MacosHandler) OnEnded() {
 func (mh *MacosHandler) OnVolume() {
 }
 
-func (mh *MacosHandler) OnPlayback() {
+func (mh *MacosHandler) OnPlayback(md handler.TrackMetadata) {
 	mh.msgMux.Lock()
-	if mh.closed {
-		mh.msgMux.Unlock()
-		return
-	}
-	mh.msgChan <- handler.Message{
-		Type: handler.MSG_GET_METADATA,
-	}
-	metadata, ok := (<-mh.ansChan).(handler.TrackMetadata)
+	closed := mh.closed
 	mh.msgMux.Unlock()
-
-	if !ok {
+	if closed {
 		return
 	}
 
-	title := metadata.Title
-	artist := strings.Join(metadata.Artists, ", ")
-	album := metadata.AlbumName
+	title := md.Title
+	artist := strings.Join(md.Artists, ", ")
+	album := md.AlbumName
 
 	cTitle := C.CString(title)
 	defer C.free(unsafe.Pointer(cTitle))
@@ -278,16 +297,34 @@ func (mh *MacosHandler) OnPlayback() {
 
 	C.updateNowPlayingInfo(
 		cTitle, cArtist, cAlbum,
-		C.double(metadata.Length.Seconds()),
+		C.double(md.Length.Seconds()),
 		C.double(0),
 		C.int(1),
 	)
 }
 
-func (mh *MacosHandler) OnPlayPause() {
+func (mh *MacosHandler) OnPlayPause(playing bool) {
+	mh.msgMux.Lock()
+	closed := mh.closed
+	mh.msgMux.Unlock()
+	if closed {
+		return
+	}
+	rate := 0
+	if playing {
+		rate = 1
+	}
+	C.setNowPlayingPlaybackRate(C.int(rate))
 }
 
 func (mh *MacosHandler) OnSeek(position time.Duration) {
+	mh.msgMux.Lock()
+	closed := mh.closed
+	mh.msgMux.Unlock()
+	if closed {
+		return
+	}
+	C.setNowPlayingElapsed(C.double(position.Seconds()))
 }
 
 func sendMsg(msg handler.Message) {

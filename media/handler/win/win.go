@@ -79,12 +79,14 @@ func (wh *WinHandler) SendAnswer(ans any) {
 }
 
 func (wh *WinHandler) OnEnded() {
+	wh.playState = PLAY_STOPED
+	_ = wh.setState(wh.playState)
 }
 
 func (wh *WinHandler) OnVolume() {
 }
 
-func (wh *WinHandler) OnPlayback() {
+func (wh *WinHandler) OnPlayback(md handler.TrackMetadata) {
 	if wh.playState == PLAY_CLOSED {
 		wh.smtc.SetIsEnabled(true)
 	}
@@ -92,31 +94,16 @@ func (wh *WinHandler) OnPlayback() {
 	wh.playState = PLAY_PLAYING
 	wh.setState(wh.playState)
 	wh.setMetadata(filepath.Join(os.TempDir(), config.DirName, "metadata.mp3"))
-
-	wh.msgMux.Lock()
-	if wh.closed {
-		wh.msgMux.Unlock()
-		return
-	}
-	wh.msgChan <- handler.Message{
-		Type: handler.MSG_GET_METADATA,
-	}
-	metadata, ok := (<-wh.ansChan).(handler.TrackMetadata)
-	wh.msgMux.Unlock()
-
-	if ok {
-		wh.trackDuration = metadata.Length
-		wh.updateTimeLineProperties(wh.trackDuration, 0)
-	}
+	wh.trackDuration = md.Length
+	wh.updateTimeLineProperties(wh.trackDuration, 0)
 }
 
-func (wh *WinHandler) OnPlayPause() {
-	if wh.playState != PLAY_PLAYING {
+func (wh *WinHandler) OnPlayPause(playing bool) {
+	if playing {
 		wh.playState = PLAY_PLAYING
 	} else {
 		wh.playState = PLAY_PAUSED
 	}
-
 	wh.setState(wh.playState)
 }
 

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -15,7 +16,10 @@ const (
 	_DIR_PERM    = 0700
 )
 
-var Current Config
+var (
+	Current Config
+	saveMu  sync.Mutex
+)
 
 func InitialLoad() error {
 	cfg, err := load()
@@ -210,6 +214,8 @@ func Path() string {
 }
 
 func Save() error {
+	saveMu.Lock()
+	defer saveMu.Unlock()
 	return save(Current)
 }
 

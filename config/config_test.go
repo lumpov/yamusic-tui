@@ -3,7 +3,10 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func withHome(t *testing.T) string {
@@ -281,5 +284,165 @@ func TestInitTestUsesFixtureWhenProductMissing(t *testing.T) {
 	}
 	if tokenFromYAML(got) != "test-token" {
 		t.Fatal("missing product must copy testdata fixture")
+	}
+}
+
+func decodePath(t *testing.T, path string) Config {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got Config
+	if err := yaml.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func TestSaveShowLyricsKeepsTokenVolumeRewindCache(t *testing.T) {
+	home := withHome(t)
+	dir := filepath.Join(home, ".config", DirName)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := configPath(home)
+	seed := []byte("token: keep-lyrics-token\nvolume: 0.4\nrewind-duration-s: 7\nshow-lyrics: false\ncache-tracks: all\n")
+	if err := os.WriteFile(path, seed, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitialLoad(); err != nil {
+		t.Fatal(err)
+	}
+	Current.ShowLyrics = true
+	if err := Save(); err != nil {
+		t.Fatal(err)
+	}
+	got := decodePath(t, path)
+	if got.Token != "keep-lyrics-token" {
+		t.Fatal("token lost")
+	}
+	if got.Volume != 0.4 {
+		t.Fatalf("volume=%v, want 0.4", got.Volume)
+	}
+	if got.RewindDuration != 7 {
+		t.Fatalf("rewind=%v, want 7", got.RewindDuration)
+	}
+	if got.CacheTracks != CACHE_ALL {
+		t.Fatalf("cache-tracks=%v, want all", got.CacheTracks)
+	}
+	if !got.ShowLyrics {
+		t.Fatal("show-lyrics not saved")
+	}
+	if got.Controls == nil || got.Search == nil {
+		t.Fatal("controls or search wiped")
+	}
+}
+
+func TestSaveEmptyTokenKeepsFileTokenAfterLyrics(t *testing.T) {
+	home := withHome(t)
+	dir := filepath.Join(home, ".config", DirName)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := configPath(home)
+	if err := os.WriteFile(path, []byte("token: keep-empty-save\nvolume: 0.4\nshow-lyrics: false\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	Current = defaultConfig
+	Current.Volume = 0.4
+	Current.ShowLyrics = true
+	if Current.Token != "" {
+		t.Fatal("default token must be empty")
+	}
+	if err := Save(); err != nil {
+		t.Fatal(err)
+	}
+	got := decodePath(t, path)
+	if got.Token != "keep-empty-save" {
+		t.Fatal("empty Current.Token replaced file token")
+	}
+	if !got.ShowLyrics {
+		t.Fatal("show-lyrics not saved")
+	}
+	if got.Volume != 0.4 {
+		t.Fatalf("volume=%v, want 0.4", got.Volume)
+	}
+}
+
+func TestConcurrentSaveLeavesValidYAMLAndToken(t *testing.T) {
+	home := withHome(t)
+	dir := filepath.Join(home, ".config", DirName)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := configPath(home)
+	if err := os.WriteFile(path, []byte("token: keep-concurrent\nvolume: 0.4\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	Current = defaultConfig
+	Current.Token = "keep-concurrent"
+	Current.Volume = 0.4
+	Current.ShowLyrics = true
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := Save(); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	got := decodePath(t, path)
+	if got.Token != "keep-concurrent" {
+		t.Fatal("concurrent Save lost token")
+	}
+	if got.Volume != 0.4 {
+		t.Fatalf("volume=%v, want 0.4", got.Volume)
+	}
+	if !got.ShowLyrics {
+		t.Fatal("show-lyrics lost")
+	}
+}
+
+func TestSaveShowLyricsDoesNotTouchProductConfig(t *testing.T) {
+	live := originalConfigPath
+	var before []byte
+	var mtime os.FileInfo
+	if live != "" {
+		if b, err := os.ReadFile(live); err == nil {
+			before = b
+			mtime, _ = os.Stat(live)
+		}
+	}
+	InitTest(t)
+	Current.ShowLyrics = !Current.ShowLyrics
+	if err := Save(); err != nil {
+		t.Fatal(err)
+	}
+	if live == "" {
+		return
+	}
+	after, err := os.ReadFile(live)
+	if len(before) == 0 {
+		if err == nil {
+			t.Fatal("product config.yaml created by lyrics Save")
+		}
+		return
+	}
+	if err != nil {
+		t.Fatal("product config.yaml disappeared")
+	}
+	st, err := os.Stat(live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mtime != nil && !st.ModTime().Equal(mtime.ModTime()) {
+		t.Fatal("product config.yaml mtime changed")
+	}
+	if string(before) != string(after) {
+		t.Fatal("product config.yaml content changed")
 	}
 }

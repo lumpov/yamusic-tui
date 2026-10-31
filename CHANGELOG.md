@@ -25,6 +25,7 @@
 
 ### Исправлено
 
+- Клавиша кэша больше не вызывает `BufferAll` из `Update`: докачка хвоста HTTP и запись файла идут в `tea.Cmd`.
 - Сохранение и удаление кэша трека больше не делают диск из `Update`. Запись и `cache.Remove` идут в `tea.Cmd`. `BufferedStream.WriteTo` копирует снимок буфера и отпускает `mux` до записи на диск ([#27](https://github.com/lumpov/yamusic-tui/pull/27)).
 - Лайк и операции с плейлистами (создать, добавить трек, переименовать, удалить) больше не вызывают HTTP из `Update`. Сеть идёт в `tea.Cmd`, `Update` применяет готовый результат ([#26](https://github.com/lumpov/yamusic-tui/pull/26)).
 - Darwin Touch Bar / Now Playing: `OnPlayPause` ставит `PlaybackRate` 1 или 0, `OnSeek` — `ElapsedPlaybackTime`, не затирая название трека. `Update` сообщает состояние после Pause/Play ([#25](https://github.com/lumpov/yamusic-tui/pull/25)).

@@ -61,6 +61,7 @@ func writeCacheFile(gen int, track api.Track, metaPath string, buf *stream.Buffe
 	tag := id3v2.NewEmptyTag()
 	tag.Reset(metadataFile, id3v2.Options{Parse: true})
 	tag.WriteTo(cacheFile)
+	buf.BufferAll()
 	buf.WriteTo(cacheFile)
 	return cacheReadyMsg{gen: gen, track: track}
 }

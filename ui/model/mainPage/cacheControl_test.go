@@ -1,11 +1,16 @@
 package mainpage
 
 import (
+	"bytes"
+	"io"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/dece2183/yamusic-tui/api"
 	"github.com/dece2183/yamusic-tui/config"
+	"github.com/dece2183/yamusic-tui/stream"
 	"github.com/dece2183/yamusic-tui/ui/components/playlist"
 	"github.com/dece2183/yamusic-tui/ui/components/tracker"
 	"github.com/dece2183/yamusic-tui/ui/components/tracklist"
@@ -105,5 +110,28 @@ func TestApplyCacheRemoveDeletesTrack(t *testing.T) {
 	got, _ := playlists.GetFirst(playlist.LOCAL)
 	if got == nil || len(got.Tracks) != 1 || got.Tracks[0].Id != "2" {
 		t.Fatalf("local tracks: %+v", got)
+	}
+}
+
+func TestWriteCacheFileBuffersRemaining(t *testing.T) {
+	config.InitTest(t)
+	meta := filepath.Join(t.TempDir(), "metadata.mp3")
+	if err := os.WriteFile(meta, []byte("xx"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("mp3body")
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(data)), int64(len(data)))
+	defer buf.Close()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if buf.Progress() >= 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	msg := writeCacheFile(1, api.Track{Id: "write-cache-file"}, meta, buf)
+	ready, ok := msg.(cacheReadyMsg)
+	if !ok || ready.errBanner != "" {
+		t.Fatalf("write: %#v", msg)
 	}
 }

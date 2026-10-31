@@ -79,3 +79,37 @@ func TestShiftRightRewindsCurrentTrack(t *testing.T) {
 		t.Fatal("right must not rewind")
 	}
 }
+
+type stallSrc struct {
+	unblock chan struct{}
+}
+
+func (s *stallSrc) Read([]byte) (int, error) {
+	<-s.unblock
+	return 0, io.EOF
+}
+
+func (s *stallSrc) Close() error { return nil }
+
+func TestCacheKeyDoesNotWaitBufferAll(t *testing.T) {
+	config.InitTest(t)
+	fp := &fakePlayer{playing: true}
+	m := NewForTest()
+	m.player = fp
+	src := &stallSrc{unblock: make(chan struct{})}
+	buf := stream.NewBufferedStream(src, 1<<20)
+	defer func() {
+		close(src.unblock)
+		buf.Close()
+	}()
+	m.trackWrapper.trackBuffer = buf
+
+	start := time.Now()
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'S'}})
+	if time.Since(start) > 50*time.Millisecond {
+		t.Fatal("cache key must not wait for BufferAll")
+	}
+	if cmd == nil {
+		t.Fatal("S must emit CACHE_TRACK")
+	}
+}

@@ -25,7 +25,8 @@
 
 ### Исправлено
 
-- Текст с метками: текущая строка — последняя, у которой время начала ≤ позиция воспроизведения. Позиция берётся с часов вывода (AudioQueueGetCurrentTime на Darwin, сэмплы oto минус буфер на Linux/Windows), не из доли прочитанных байт стрима. После последней метки строка остаётся. Доли секунды LRC `.5` / `.50` / `.500` — 500 мс. Строки `[ar:]`, `[offset:]` и прочие нечисловые теги не становятся текстом ([#30](https://github.com/lumpov/yamusic-tui/pull/30)).
+- Текст с метками: текущая строка — последняя, у которой время начала ≤ позиция воспроизведения. После последней метки строка остаётся. Доли секунды LRC `.5` / `.50` / `.500` — 500 мс. Строки `[ar:]`, `[offset:]` и прочие нечисловые теги не становятся текстом ([#30](https://github.com/lumpov/yamusic-tui/pull/30)).
+- Позиция текста, полосы и `mm:ss` берётся с часов вывода (`AudioQueueGetCurrentTime` на Darwin, сэмплы oto минус буфер на Linux/Windows), не из доли прочитанных байт стрима ([#30](https://github.com/lumpov/yamusic-tui/pull/30)).
 - Громкость и показ текста песни больше не пишут `config.yaml` из `Update`. `config.Save` идёт в `tea.Cmd`, параллельные записи в файл сериализуются ([#29](https://github.com/lumpov/yamusic-tui/pull/29)).
 - Клавиша кэша больше не вызывает `BufferAll` из `Update`: докачка хвоста HTTP и запись файла идут в `tea.Cmd` ([#28](https://github.com/lumpov/yamusic-tui/pull/28)).
 - Сохранение и удаление кэша трека больше не делают диск из `Update`. Запись и `cache.Remove` идут в `tea.Cmd`. `BufferedStream.WriteTo` копирует снимок буфера и отпускает `mux` до записи на диск ([#27](https://github.com/lumpov/yamusic-tui/pull/27)).
@@ -41,9 +42,9 @@
 - TEXT без меток времени снова идёт по прогрессу трека, без `No lyrics timestamps for this track` ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
 - `log.Start` оставляет файл лога, если `Chmod` не удался ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
 - `BufferedStream` не держит `mux` на время `Read`/`ReadFull` сети: Stop из `Update` не ждёт HTTP. Копирование в буфер — под замком ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
-- Windows SMTC: токен `PlaybackPositionChangeRequested` снимается `RemovePlaybackPositionChangeRequested`, а не `RemoveButtonPressed`.
-- Иконка Play в списке треков берёт `tracker.IsPlaying()`: движение по плейлистам и Back больше не включают её на паузе. Pause/Play обновляют иконку сразу.
-- Без фокуса окна `View` не пересобирает списки: отдаёт снимок `idleView`. Bubble Tea после каждого `Update` всегда рисует кадр; `skipUIProgress` закрывал только прогресс, а `volumeFadeTickMsg` и прочие сообщения всё равно собирали lipgloss. `volumeFader` шлёт тик только пока громкость не на цели.
+- Windows SMTC: токен `PlaybackPositionChangeRequested` снимается `RemovePlaybackPositionChangeRequested`, а не `RemoveButtonPressed` ([#22](https://github.com/lumpov/yamusic-tui/pull/22)).
+- Иконка Play в списке треков берёт `tracker.IsPlaying()`: движение по плейлистам и Back больше не включают её на паузе. Pause/Play обновляют иконку сразу ([#21](https://github.com/lumpov/yamusic-tui/pull/21)).
+- Без фокуса окна `View` не пересобирает списки: отдаёт снимок `idleView`. Bubble Tea после каждого `Update` всегда рисует кадр; `skipUIProgress` закрывал только прогресс, а `volumeFadeTickMsg` и прочие сообщения всё равно собирали lipgloss. `volumeFader` шлёт тик только пока громкость не на цели ([#20](https://github.com/lumpov/yamusic-tui/pull/20)).
 - Перемотка выравнивает байтовый offset вниз на границу PCM-сэмпла (4 байта, s16le stereo). Было `offset += offset % 4` (1→2, 3→6, не кратно 4) ([#17](https://github.com/lumpov/yamusic-tui/pull/17)).
 - Если MP3-декодер не создаётся, oto не получает сырой MP3 (ожидает PCM s16le). Open не вызывается, в трекере `mp3 decoder` ([#16](https://github.com/lumpov/yamusic-tui/pull/16)).
 - Если у текста песни нет меток времени, вместо статичных строк показывается `No lyrics timestamps for this track` (как `No lyrics for this track`, когда текста нет) ([#11](https://github.com/lumpov/yamusic-tui/pull/11)).

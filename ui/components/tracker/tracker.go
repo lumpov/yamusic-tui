@@ -50,6 +50,7 @@ const (
 	_VOLUME_SNAP_THRESHOLD = 0.005
 	_VOLUME_FADE_PERIOD    = 60 * time.Millisecond
 	_REWIND_SETTLE         = 200 * time.Millisecond
+	_PLAYHEAD_TICK         = 100 * time.Millisecond
 )
 
 type SeekBy time.Duration
@@ -57,6 +58,7 @@ type SeekTo time.Duration
 type VolumeTo float64
 
 type rewindSettleMsg uint64
+type playheadTickMsg uint64
 type volumeFadeTickMsg struct{}
 type configSavedMsg struct{}
 
@@ -76,6 +78,8 @@ type Model struct {
 	paused            bool
 	playtime          time.Duration
 	playStarted       time.Time
+	playheadOrigin    time.Duration
+	playheadGen       uint64
 	volume            float64
 	volumeIncremet    float64
 	lastVolumeKey     time.Time
@@ -160,7 +164,7 @@ func (m *Model) View() string {
 	}
 
 	m.progress.Width = m.width - volumeIndicatorWidth - 9
-	tracker := style.TrackProgressStyle.Render(m.progress.ViewAs(m.progress.Percent()))
+	tracker := style.TrackProgressStyle.Render(m.progress.ViewAs(m.positionPercent()))
 	tracker = lipgloss.JoinHorizontal(lipgloss.Top, playButton, tracker, volumeIndicator)
 
 	if m.showLyrics {
@@ -188,7 +192,7 @@ func (m *Model) View() string {
 		trackTitle = lipgloss.JoinHorizontal(lipgloss.Top, trackTitle, trackVersion)
 
 		durTotal := time.Millisecond * time.Duration(m.track.DurationMs)
-		durEllapsed := time.Millisecond * time.Duration(float64(m.track.DurationMs)*m.progress.Percent())
+		durEllapsed := m.Position()
 		trackTime := style.TrackVersionStyle.Render(fmt.Sprintf("%02d:%02d/%02d:%02d",
 			int(durEllapsed.Minutes()),
 			int(durEllapsed.Seconds())%60,
@@ -298,6 +302,7 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 		switch msg {
 		case PLAY:
 			m.Play()
+			cmds = append(cmds, m.startPlayheadTick())
 		case PAUSE:
 			m.Pause()
 		case STOP:
@@ -307,6 +312,7 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 				m.Pause()
 			} else {
 				m.Play()
+				cmds = append(cmds, m.startPlayheadTick())
 			}
 		}
 
@@ -325,12 +331,17 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 
 	// track progress update
 	case ProgressControl:
-		cmd = m.progress.SetPercent(msg.Value())
+		cmd = m.progress.SetPercent(m.positionPercent())
 		cmds = append(cmds, cmd)
+
+	case playheadTickMsg:
+		if uint64(msg) == m.playheadGen && m.player != nil && !m.paused {
+			cmds = append(cmds, m.playheadTickCmd(m.playheadGen))
+		}
 
 	case rewindSettleMsg:
 		if uint64(msg) == m.rewindGen {
-			m.finishRewindBurst()
+			cmds = append(cmds, m.finishRewindBurst())
 		}
 
 	case progress.FrameMsg:
@@ -364,11 +375,63 @@ func (m *Model) Height() int {
 }
 
 func (m *Model) Progress() float64 {
-	return m.progress.Percent()
+	return m.positionPercent()
 }
 
 func (m *Model) Position() time.Duration {
+	if m.player != nil {
+		if t, ok := m.player.CurrentTime(); ok {
+			pos := m.playheadOrigin + t
+			if pos < 0 {
+				pos = 0
+			}
+			max := time.Duration(m.track.DurationMs) * time.Millisecond
+			if max > 0 && pos > max {
+				pos = max
+			}
+			return pos
+		}
+	}
+	if m.trackWrapper == nil {
+		return 0
+	}
 	return time.Duration(float64(m.track.DurationMs)*m.trackWrapper.Progress()) * time.Millisecond
+}
+
+func (m *Model) positionPercent() float64 {
+	if m.track.DurationMs <= 0 {
+		return 0
+	}
+	p := float64(m.Position().Milliseconds()) / float64(m.track.DurationMs)
+	if p < 0 {
+		return 0
+	}
+	if p > 1 {
+		return 1
+	}
+	return p
+}
+
+func (m *Model) nextPlayheadGen() uint64 {
+	m.playheadGen++
+	return m.playheadGen
+}
+
+func (m *Model) playheadTickCmd(gen uint64) tea.Cmd {
+	return tea.Tick(_PLAYHEAD_TICK, func(time.Time) tea.Msg {
+		return playheadTickMsg(gen)
+	})
+}
+
+func (m *Model) startPlayheadTick() tea.Cmd {
+	return m.playheadTickCmd(m.nextPlayheadGen())
+}
+
+func (m *Model) emitPlayheadTick() {
+	if m.program == nil {
+		return
+	}
+	go m.program.Send(playheadTickMsg(m.nextPlayheadGen()))
 }
 
 func saveConfigCmd() tea.Cmd {
@@ -432,8 +495,10 @@ func (m *Model) StartTrack(track *api.Track, reader *stream.BufferedStream, lyri
 	m.paused = false
 	m.playtime = 0
 	m.playStarted = time.Now()
+	m.playheadOrigin = 0
 	m.rewindBurst = false
 	m.rewindGen++
+	m.emitPlayheadTick()
 }
 
 func (m *Model) Stop() {
@@ -519,7 +584,7 @@ func (m *Model) Rewind(amount time.Duration) tea.Cmd {
 	}
 
 	length := m.trackWrapper.Length()
-	current := int64(float64(length) * m.trackWrapper.Progress())
+	current := compressedByteOffset(length, float64(m.track.DurationMs), float64(m.Position().Milliseconds()))
 	if m.rewindBurst {
 		current = m.rewindTargetBytes
 	} else {
@@ -533,6 +598,7 @@ func (m *Model) Rewind(amount time.Duration) tea.Cmd {
 	pos = clampPlayableByteOffset(pos, length, m.rewindStepBytes())
 	pos -= pos % 4
 	m.rewindTargetBytes = pos
+	m.playheadOrigin = byteOffsetToDuration(pos, length, float64(m.track.DurationMs))
 	playbacktrace.Event("rewind amount=%s burst=%v from=%d to=%d len=%d", amount, m.rewindBurst, current, pos, length)
 	if _, err := m.player.Seek(pos, io.SeekStart); err != nil {
 		log.Print(log.LVL_ERROR, "rewind seek: %s", err)
@@ -542,7 +608,7 @@ func (m *Model) Rewind(amount time.Duration) tea.Cmd {
 	m.rewindGen++
 	gen := m.rewindGen
 	return tea.Batch(
-		m.progress.SetPercent(m.trackWrapper.Progress()),
+		m.progress.SetPercent(m.positionPercent()),
 		tea.Tick(_REWIND_SETTLE, func(time.Time) tea.Msg {
 			return rewindSettleMsg(gen)
 		}),
@@ -560,14 +626,14 @@ func (m *Model) rewindStepBytes() int64 {
 	return step
 }
 
-func (m *Model) finishRewindBurst() {
+func (m *Model) finishRewindBurst() tea.Cmd {
 	if !m.rewindBurst {
-		return
+		return nil
 	}
 	m.rewindBurst = false
 	m.rewindTargetBytes = 0
 	if m.player == nil {
-		return
+		return nil
 	}
 	if m.rewindWasPlaying {
 		m.paused = false
@@ -575,9 +641,10 @@ func (m *Model) finishRewindBurst() {
 		m.player.SetVolume(m.volume)
 		m.player.Play()
 		playbacktrace.Event("rewind settle play isPlaying=%v", m.player.IsPlaying())
-	} else {
-		playbacktrace.Event("rewind settle stay-paused")
+		return m.startPlayheadTick()
 	}
+	playbacktrace.Event("rewind settle stay-paused")
+	return nil
 }
 
 func (m *Model) SetPos(pos time.Duration) {
@@ -594,6 +661,7 @@ func (m *Model) SetPos(pos time.Duration) {
 	)
 	byteOffset -= byteOffset % 4
 	m.player.Seek(byteOffset, io.SeekStart)
+	m.playheadOrigin = byteOffsetToDuration(byteOffset, length, float64(m.track.DurationMs))
 }
 
 func (m *Model) TrackBuffer() *stream.BufferedStream {
@@ -699,11 +767,7 @@ func (m *Model) renderLyrics() string {
 		if len(m.lyrics) == 0 {
 			currentLine = "No lyrics for this track"
 		} else if m.lyricsHaveTimestamps() {
-			nowMs := 0
-			if m.trackWrapper != nil {
-				nowMs = int(m.Position().Milliseconds())
-			}
-			idx := m.syncedLyricsIndex(nowMs)
+			idx := m.syncedLyricsIndex(int(m.Position().Milliseconds()))
 			if idx >= 0 {
 				previousLine = m.tryGetLyricsLine(idx - 1)
 				currentLine = m.lyricsBreak(m.tryGetLyricsLine(idx))

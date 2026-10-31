@@ -1,5 +1,7 @@
 package tracker
 
+import "time"
+
 type audioPlayer interface {
 	Play()
 	Pause()
@@ -8,6 +10,7 @@ type audioPlayer interface {
 	Volume() float64
 	Seek(offset int64, whence int) (int64, error)
 	IsPlaying() bool
+	CurrentTime() (time.Duration, bool)
 }
 
 type audioBackend interface {

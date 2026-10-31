@@ -22,12 +22,14 @@ func testMP3Bytes(t *testing.T) []byte {
 }
 
 type fakePlayer struct {
-	playing bool
-	volume  float64
-	offset  int64
-	closed  bool
-	plays   int
-	pauses  int
+	playing     bool
+	volume      float64
+	offset      int64
+	closed      bool
+	plays       int
+	pauses      int
+	currentTime time.Duration
+	hasTime     bool
 }
 
 func (p *fakePlayer) Play()               { p.playing = true; p.plays++ }
@@ -40,6 +42,9 @@ func (p *fakePlayer) Seek(offset int64, whence int) (int64, error) {
 	return offset, nil
 }
 func (p *fakePlayer) IsPlaying() bool { return p.playing }
+func (p *fakePlayer) CurrentTime() (time.Duration, bool) {
+	return p.currentTime, p.hasTime
+}
 
 type fakeBackend struct {
 	player *fakePlayer
@@ -234,6 +239,27 @@ func TestRewindPausesUntilSettle(t *testing.T) {
 	}
 	if m.paused {
 		t.Fatal("settle must clear paused")
+	}
+}
+
+func TestPlayheadTickReschedulesWhilePlaying(t *testing.T) {
+	config.InitTest(t)
+	fp := &fakePlayer{playing: true, hasTime: true, currentTime: time.Second}
+	m := NewForTest()
+	m.player = fp
+	m.paused = false
+	m.playheadGen = 3
+	m.track = api.Track{DurationMs: 10000}
+
+	_, cmd := m.Update(playheadTickMsg(3))
+	if cmd == nil {
+		t.Fatal("playing tracker must reschedule playhead tick")
+	}
+
+	m.paused = true
+	_, cmd = m.Update(playheadTickMsg(3))
+	if cmd != nil {
+		t.Fatal("paused tracker must not reschedule playhead tick")
 	}
 }
 

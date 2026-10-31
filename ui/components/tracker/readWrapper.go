@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -26,6 +27,7 @@ type readWrapper struct {
 	trackDone      bool
 	emitNextOnEOF  bool
 	lastUpdateTime time.Time
+	offset         atomic.Int64
 }
 
 func (w *readWrapper) NewReader(reader *stream.BufferedStream) error {
@@ -39,6 +41,7 @@ func (w *readWrapper) NewReader(reader *stream.BufferedStream) error {
 		return err
 	}
 	w.source = source
+	w.offset.Store(0)
 	w.lastUpdateTime = time.Now()
 	return nil
 }
@@ -56,6 +59,9 @@ func (w *readWrapper) Read(dest []byte) (n int, err error) {
 	}
 
 	n, err = w.source.Read(dest)
+	if n > 0 {
+		w.offset.Add(int64(n))
+	}
 	if err != nil && err != io.EOF {
 		if w.trackBuffer.Error() != nil {
 			err = w.trackBuffer.Error()
@@ -83,7 +89,15 @@ func (w *readWrapper) Seek(offset int64, whence int) (int64, error) {
 		return 0, io.EOF
 	}
 	w.trackDone = false
-	return w.source.Seek(offset, whence)
+	pos, err := w.source.Seek(offset, whence)
+	if err == nil {
+		w.offset.Store(pos)
+	}
+	return pos, err
+}
+
+func (w *readWrapper) Offset() int64 {
+	return w.offset.Load()
 }
 
 func (w *readWrapper) Length() int64 {

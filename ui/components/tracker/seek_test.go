@@ -45,6 +45,18 @@ func TestCompressedByteOffsetNegativeRewind(t *testing.T) {
 	}
 }
 
+func TestByteOffsetToDuration(t *testing.T) {
+	if got := byteOffsetToDuration(500, 1000, 1000); got.Milliseconds() != 500 {
+		t.Fatalf("got %d", got.Milliseconds())
+	}
+	if got := byteOffsetToDuration(0, 1000, 1000); got != 0 {
+		t.Fatalf("zero offset: %v", got)
+	}
+	if got := byteOffsetToDuration(10, 0, 1000); got != 0 {
+		t.Fatalf("zero length: %v", got)
+	}
+}
+
 func TestClampByteOffset(t *testing.T) {
 	if got := clampByteOffset(-10, 100); got != 0 {
 		t.Fatalf("got %d, want 0", got)

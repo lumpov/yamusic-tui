@@ -44,6 +44,7 @@ typedef struct {
 	int discontinuity;
 	float volume;
 	AudioFileTypeID fileType;
+	Float64 sampleRate;
 } AQPlayer;
 
 static void queueCallback(void *ud, AudioQueueRef q, AudioQueueBufferRef buf) {
@@ -201,6 +202,7 @@ static void propertyListener(void *ud, AudioFileStreamID stream, AudioFileStream
 	}
 
 	pthread_mutex_lock(&p->mu);
+	p->sampleRate = asbd.mSampleRate;
 	int hasQueue = p->queue != NULL;
 	pthread_mutex_unlock(&p->mu);
 	if (hasQueue) {
@@ -313,6 +315,31 @@ static int aqHasQueue(AQPlayer *p) {
 	int has = p->queue != NULL;
 	pthread_mutex_unlock(&p->mu);
 	return has;
+}
+
+static double aqPlayheadSeconds(AQPlayer *p) {
+	if (p == NULL) {
+		return 0;
+	}
+	pthread_mutex_lock(&p->mu);
+	AudioQueueRef q = p->queue;
+	Float64 sr = p->sampleRate;
+	int started = p->started;
+	int closed = p->closed;
+	pthread_mutex_unlock(&p->mu);
+	if (closed || sr <= 0 || q == NULL || !started) {
+		return 0;
+	}
+	AudioTimeStamp ts;
+	memset(&ts, 0, sizeof(ts));
+	OSStatus err = AudioQueueGetCurrentTime(q, NULL, &ts, NULL);
+	if (err != noErr) {
+		return -1;
+	}
+	if (ts.mSampleTime < 0) {
+		return 0;
+	}
+	return ts.mSampleTime / sr;
 }
 
 static void aqFinish(AQPlayer *p) {
@@ -432,21 +459,22 @@ func (darwinBackend) Open(src *readWrapper) audioPlayer {
 }
 
 type darwinPlayer struct {
-	src         *readWrapper
-	handle      cgo.Handle
-	c           *C.AQPlayer
-	mu          sync.Mutex
-	ioMu        sync.Mutex
-	parseMu     sync.Mutex
-	playing     bool
-	paused      bool
-	closed      bool
-	feeding     bool
-	eofFinished bool
-	eofLogged   bool
-	volume      float64
-	stopCh      chan struct{}
-	feedDone    chan struct{}
+	src          *readWrapper
+	handle       cgo.Handle
+	c            *C.AQPlayer
+	mu           sync.Mutex
+	ioMu         sync.Mutex
+	parseMu      sync.Mutex
+	playing      bool
+	paused       bool
+	closed       bool
+	feeding      bool
+	eofFinished  bool
+	eofLogged    bool
+	volume       float64
+	lastPlayhead time.Duration
+	stopCh       chan struct{}
+	feedDone     chan struct{}
 }
 
 func newDarwinPlayer(src *readWrapper) *darwinPlayer {
@@ -577,6 +605,7 @@ func (p *darwinPlayer) Seek(offset int64, whence int) (int64, error) {
 	p.mu.Lock()
 	p.eofFinished = false
 	p.eofLogged = false
+	p.lastPlayhead = 0
 	p.mu.Unlock()
 	p.ioMu.Unlock()
 	t0 = time.Now()
@@ -620,6 +649,27 @@ func (p *darwinPlayer) IsPlaying() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.playing && !p.paused
+}
+
+func (p *darwinPlayer) CurrentTime() (time.Duration, bool) {
+	p.mu.Lock()
+	if p.closed || p.c == nil {
+		last := p.lastPlayhead
+		p.mu.Unlock()
+		return last, false
+	}
+	c := p.c
+	last := p.lastPlayhead
+	p.mu.Unlock()
+	sec := float64(C.aqPlayheadSeconds(c))
+	if sec < 0 {
+		return last, true
+	}
+	d := time.Duration(sec * float64(time.Second))
+	p.mu.Lock()
+	p.lastPlayhead = d
+	p.mu.Unlock()
+	return d, true
 }
 
 func (p *darwinPlayer) enqueuePending() {

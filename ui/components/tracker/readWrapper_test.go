@@ -84,3 +84,24 @@ func TestReadWrapperSeekClearsTrackDone(t *testing.T) {
 		t.Fatal("Seek must clear trackDone")
 	}
 }
+
+func TestReadWrapperOffsetTracksReadAndSeek(t *testing.T) {
+	data := bytes.Repeat([]byte{1}, 32)
+	buf := stream.NewBufferedStream(io.NopCloser(bytes.NewReader(data)), int64(len(data)))
+	defer buf.Close()
+
+	w := &readWrapper{program: nil, source: buf, trackBuffer: buf}
+	dest := make([]byte, 8)
+	if _, err := w.Read(dest); err != nil {
+		t.Fatal(err)
+	}
+	if w.Offset() != 8 {
+		t.Fatalf("after read offset=%d, want 8", w.Offset())
+	}
+	if _, err := w.Seek(4, io.SeekStart); err != nil {
+		t.Fatal(err)
+	}
+	if w.Offset() != 4 {
+		t.Fatalf("after seek offset=%d, want 4", w.Offset())
+	}
+}

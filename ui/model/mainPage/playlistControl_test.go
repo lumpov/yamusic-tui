@@ -59,6 +59,9 @@ func TestShufflePlaylistCurrentTrackOutOfRange(t *testing.T) {
 		currentPlaylistIndex: -1,
 	}
 	_ = m.shufflePlaylist(pl)
+	if !m.shuffleOn {
+		t.Fatal("shufflePlaylist must set shuffleOn")
+	}
 	if pl.CurrentTrack != -1 {
 		t.Fatalf("CurrentTrack=%d, want -1", pl.CurrentTrack)
 	}

@@ -33,7 +33,10 @@ func (*DummyHandler) SendAnswer(ans any) {
 func (*DummyHandler) OnEnded() {
 }
 
-func (*DummyHandler) OnVolume() {
+func (*DummyHandler) OnVolume(float64) {
+}
+
+func (*DummyHandler) OnShuffle(bool) {
 }
 
 func (*DummyHandler) OnPlayback(handler.TrackMetadata) {

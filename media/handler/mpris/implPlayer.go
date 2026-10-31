@@ -82,6 +82,14 @@ func (mh *MprisHandler) SetPosition(trackId string, position types.Microseconds)
 }
 
 func (mh *MprisHandler) OpenUri(uri string) error {
+	trackId, ok := handler.YandexTrackIdFromURI(uri)
+	if !ok {
+		return fmt.Errorf("unsupported uri")
+	}
+	mh.send(handler.Message{
+		Type: handler.MSG_OPEN_URI,
+		Arg:  trackId,
+	})
 	return nil
 }
 
@@ -111,7 +119,33 @@ func (mh *MprisHandler) Rate() (float64, error) {
 	return 1, nil
 }
 
-func (mh *MprisHandler) SetRate(float64) error {
+func (mh *MprisHandler) SetRate(rate float64) error {
+	if rate == 0 {
+		mh.send(handler.Message{
+			Type: handler.MSG_PAUSE,
+		})
+		return nil
+	}
+	return nil
+}
+
+func (mh *MprisHandler) Shuffle() (bool, error) {
+	mh.send(handler.Message{
+		Type: handler.MSG_GET_SHUFFLE,
+	})
+
+	resp, ok := (<-mh.ansChan).(bool)
+	if !ok {
+		return false, fmt.Errorf("wrong shuffle type")
+	}
+	return resp, nil
+}
+
+func (mh *MprisHandler) SetShuffle(on bool) error {
+	mh.send(handler.Message{
+		Type: handler.MSG_SET_SHUFFLE,
+		Arg:  on,
+	})
 	return nil
 }
 

@@ -18,7 +18,8 @@ func (stubMedia) Start(func() error) error         { return nil }
 func (stubMedia) Message() <-chan handler.Message  { return nil }
 func (stubMedia) SendAnswer(any)                   {}
 func (stubMedia) OnEnded()                         {}
-func (stubMedia) OnVolume()                        {}
+func (stubMedia) OnVolume(float64)                 {}
+func (stubMedia) OnShuffle(bool)                   {}
 func (stubMedia) OnPlayback(handler.TrackMetadata) {}
 func (stubMedia) OnPlayPause(bool)                 {}
 func (stubMedia) OnSeek(time.Duration)             {}

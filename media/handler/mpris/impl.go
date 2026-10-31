@@ -29,7 +29,7 @@ func (mh *MprisHandler) Identity() (string, error) {
 }
 
 func (mh *MprisHandler) SupportedUriSchemes() ([]string, error) {
-	return []string{}, nil
+	return []string{"https"}, nil
 }
 
 func (mh *MprisHandler) SupportedMimeTypes() ([]string, error) {

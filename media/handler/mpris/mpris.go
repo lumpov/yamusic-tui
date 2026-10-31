@@ -76,8 +76,12 @@ func (mh *MprisHandler) OnEnded() {
 	mh.evHandler.Player.OnEnded()
 }
 
-func (mh *MprisHandler) OnVolume() {
+func (mh *MprisHandler) OnVolume(float64) {
 	mh.evHandler.Player.OnVolume()
+}
+
+func (mh *MprisHandler) OnShuffle(bool) {
+	mh.evHandler.Player.OnOptions()
 }
 
 func (mh *MprisHandler) OnPlayback(handler.TrackMetadata) {

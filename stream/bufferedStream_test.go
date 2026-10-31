@@ -176,3 +176,46 @@ func TestWriteToCopiesUnderLock(t *testing.T) {
 		t.Fatalf("n=%d dest=%q", n, dest.String())
 	}
 }
+
+type blockWriter struct {
+	started chan struct{}
+	release chan struct{}
+	buf     bytes.Buffer
+}
+
+func (w *blockWriter) Write(p []byte) (int, error) {
+	close(w.started)
+	<-w.release
+	return w.buf.Write(p)
+}
+
+func TestWriteToReleasesMuxBeforeDestWrite(t *testing.T) {
+	data := []byte("cache-me")
+	src := &closeRecorder{Reader: bytes.NewReader(data)}
+	s := NewBufferedStream(src, int64(len(data)))
+	defer s.Close()
+	waitBuffered(t, s, len(data))
+
+	dest := &blockWriter{started: make(chan struct{}), release: make(chan struct{})}
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.WriteTo(dest)
+		done <- err
+	}()
+	select {
+	case <-dest.started:
+	case <-time.After(time.Second):
+		t.Fatal("WriteTo did not reach dest")
+	}
+	errCh := make(chan error, 1)
+	go func() { errCh <- s.Error() }()
+	select {
+	case <-errCh:
+	case <-time.After(time.Second):
+		t.Fatal("WriteTo still holds mux during dest.Write")
+	}
+	close(dest.release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}

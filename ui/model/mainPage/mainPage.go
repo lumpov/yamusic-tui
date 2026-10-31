@@ -50,6 +50,7 @@ type Model struct {
 	playGen              int
 	likeGen              int
 	playlistGen          int
+	cacheGen             int
 	currentPlaylistIndex int
 	currentAlbumIndex    int
 
@@ -159,6 +160,10 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.applyRenamePlaylist(msg)
 	case removePlaylistReadyMsg:
 		return m, m.applyRemovePlaylist(msg)
+	case cacheReadyMsg:
+		return m, m.applyCache(msg)
+	case cacheRemoveReadyMsg:
+		return m, m.applyCacheRemove(msg)
 
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)

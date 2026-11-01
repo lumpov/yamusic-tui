@@ -26,6 +26,7 @@ const (
 
 	MSG_SET_SHUFFLE
 	MSG_SET_VOLUME
+	MSG_OPEN_URI
 )
 
 type Message struct {
@@ -60,7 +61,8 @@ type MediaHandler interface {
 	SendAnswer(ans any)
 
 	OnEnded()
-	OnVolume()
+	OnVolume(vol float64)
+	OnShuffle(on bool)
 	OnPlayback(md TrackMetadata)
 	OnPlayPause(playing bool)
 	OnSeek(position time.Duration)

@@ -20,6 +20,7 @@ extern void goOnNext(void);
 extern void goOnPrevious(void);
 extern void goOnSeek(double positionSeconds);
 extern void goOnSetVolume(double volume);
+extern void goOnSetShuffle(int on);
 extern void goOnStop(void);
 
 static void setupRemoteCommandCenter(void) {
@@ -67,6 +68,13 @@ static void setupRemoteCommandCenter(void) {
         goOnStop();
         return MPRemoteCommandHandlerStatusSuccess;
     }];
+
+    [center.changeShuffleModeCommand setEnabled:YES];
+    [center.changeShuffleModeCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *event) {
+        MPChangeShuffleModeCommandEvent *shuffleEvent = (MPChangeShuffleModeCommandEvent *)event;
+        goOnSetShuffle(shuffleEvent.shuffleType != MPShuffleTypeOff);
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
 }
 
 static void teardownRemoteCommandCenter(void) {
@@ -78,6 +86,7 @@ static void teardownRemoteCommandCenter(void) {
     [center.previousTrackCommand removeTarget:nil];
     [center.changePlaybackPositionCommand removeTarget:nil];
     [center.stopCommand removeTarget:nil];
+    [center.changeShuffleModeCommand removeTarget:nil];
 }
 
 static void runLoop(void) {
@@ -192,6 +201,15 @@ static void setNowPlayingElapsed(double elapsedSeconds) {
 static void clearNowPlayingInfo(void) {
     [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:nil];
 }
+
+static void setNowPlayingShuffle(int on) {
+    MPRemoteCommandCenter *center = [MPRemoteCommandCenter sharedCommandCenter];
+    if (on) {
+        center.changeShuffleModeCommand.currentShuffleType = MPShuffleTypeItems;
+    } else {
+        center.changeShuffleModeCommand.currentShuffleType = MPShuffleTypeOff;
+    }
+}
 */
 import "C"
 import (
@@ -273,7 +291,21 @@ func (mh *MacosHandler) OnEnded() {
 	C.clearNowPlayingInfo()
 }
 
-func (mh *MacosHandler) OnVolume() {
+func (mh *MacosHandler) OnVolume(float64) {
+}
+
+func (mh *MacosHandler) OnShuffle(on bool) {
+	mh.msgMux.Lock()
+	closed := mh.closed
+	mh.msgMux.Unlock()
+	if closed {
+		return
+	}
+	flag := 0
+	if on {
+		flag = 1
+	}
+	C.setNowPlayingShuffle(C.int(flag))
 }
 
 func (mh *MacosHandler) OnPlayback(md handler.TrackMetadata) {
@@ -380,6 +412,11 @@ func goOnSeek(positionSeconds C.double) {
 //export goOnSetVolume
 func goOnSetVolume(volume C.double) {
 	sendMsg(handler.Message{Type: handler.MSG_SET_VOLUME, Arg: float64(volume)})
+}
+
+//export goOnSetShuffle
+func goOnSetShuffle(on C.int) {
+	sendMsg(handler.Message{Type: handler.MSG_SET_SHUFFLE, Arg: on != 0})
 }
 
 //export goOnStop

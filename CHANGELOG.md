@@ -25,6 +25,9 @@
 
 ### Исправлено
 
+- Медиакнопки: `OnVolume` передаёт громкость плеера. MPRIS шлёт `PropertiesChanged` Volume. Windows ставит `MediaPlayer.Volume` у SMTC-плеера. Darwin Now Playing не имеет поля громкости ([#31](https://github.com/lumpov/yamusic-tui/pull/31)).
+- `GET_SHUFFLE` возвращает флаг после перемешивания, а не всегда `false`. `SET_SHUFFLE false` сбрасывает флаг без обратной перестановки. MPRIS: свойства Shuffle, Darwin `changeShuffleModeCommand` ([#31](https://github.com/lumpov/yamusic-tui/pull/31)).
+- MPRIS `OpenUri` открывает `https://music.yandex.ru/album/{id}/track/{id}` из уже загруженных плейлистов. `SetRate(0)` ставит паузу, другие значения (при MinimumRate=MaximumRate=1) не меняют скорость ([#31](https://github.com/lumpov/yamusic-tui/pull/31)).
 - Текст с метками: текущая строка — последняя, у которой время начала ≤ позиция воспроизведения. После последней метки строка остаётся. Доли секунды LRC `.5` / `.50` / `.500` — 500 мс. Строки `[ar:]`, `[offset:]` и прочие нечисловые теги не становятся текстом ([#30](https://github.com/lumpov/yamusic-tui/pull/30)).
 - Позиция текста, полосы и `mm:ss` берётся с часов вывода (`AudioQueueGetCurrentTime` на Darwin, сэмплы oto минус буфер на Linux/Windows), не из доли прочитанных байт стрима ([#30](https://github.com/lumpov/yamusic-tui/pull/30)).
 - Громкость и показ текста песни больше не пишут `config.yaml` из `Update`. `config.Save` идёт в `tea.Cmd`, параллельные записи в файл сериализуются ([#29](https://github.com/lumpov/yamusic-tui/pull/29)).

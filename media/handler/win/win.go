@@ -83,7 +83,22 @@ func (wh *WinHandler) OnEnded() {
 	_ = wh.setState(wh.playState)
 }
 
-func (wh *WinHandler) OnVolume() {
+func (wh *WinHandler) OnVolume(vol float64) {
+	wh.msgMux.Lock()
+	closed := wh.closed
+	wh.msgMux.Unlock()
+	if closed || wh.mediaPlayer == nil {
+		return
+	}
+	if vol < 0 {
+		vol = 0
+	} else if vol > 1 {
+		vol = 1
+	}
+	_ = setMediaPlayerVolume(wh.mediaPlayer, vol)
+}
+
+func (wh *WinHandler) OnShuffle(bool) {
 }
 
 func (wh *WinHandler) OnPlayback(md handler.TrackMetadata) {

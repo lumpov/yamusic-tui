@@ -478,3 +478,26 @@ func (m *Model) playSelectedPlaylist(trackIndex int) tea.Cmd {
 	m.playQueueTrackIndex = trackIndex
 	return tea.Batch(rotate, m.playTrack(trackToPlay))
 }
+
+func (m *Model) playLoadedTrackId(trackId string) tea.Cmd {
+	if trackId == "" || m.playlists == nil {
+		return nil
+	}
+	items := m.playlists.Items()
+	for i, pl := range items {
+		if pl == nil || !pl.Active {
+			continue
+		}
+		for j := range pl.Tracks {
+			if pl.Tracks[j].Id != trackId {
+				continue
+			}
+			m.playlists.Select(i)
+			pl.SelectedTrack = j
+			m.playlists.SetItem(i, pl)
+			m.displayPlaylist(pl)
+			return m.playSelectedPlaylist(j)
+		}
+	}
+	return nil
+}

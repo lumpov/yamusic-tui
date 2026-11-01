@@ -416,6 +416,11 @@ func (m *Model) shufflePlaylist(pl *playlist.Item) tea.Cmd {
 		m.indicateCurrentTrackPlaying(m.tracker.IsPlaying())
 	}
 
+	m.shuffleOn = true
+	if m.mediaHandler != nil {
+		m.mediaHandler.OnShuffle(true)
+	}
+
 	return tea.Batch(cmds...)
 }
 

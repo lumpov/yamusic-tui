@@ -53,9 +53,9 @@ func newHelpMap() *helpKeyMap {
 
 func (k helpKeyMap) ShortHelp() []key.Binding {
 	if k.HasArtist {
-		return []key.Binding{k.CursorUp, k.CursorDown, k.Play, k.LikeUnlike, k.ShowArtist, k.ShowHelp}
+		return []key.Binding{k.CursorUp, k.CursorDown, k.Play, k.LikeUnlike, k.ShowArtist}
 	}
-	return []key.Binding{k.CursorUp, k.CursorDown, k.Play, k.LikeUnlike, k.ShowHelp}
+	return []key.Binding{k.CursorUp, k.CursorDown, k.Play, k.LikeUnlike}
 }
 
 func (k helpKeyMap) FullHelp() [][]key.Binding {

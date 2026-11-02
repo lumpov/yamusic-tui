@@ -69,6 +69,7 @@ func (m *Model) applyDislike(msg dislikeReadyMsg) tea.Cmd {
 		return nil
 	}
 	if msg.err != nil {
+		log.Print(log.LVL_ERROR, "failed to dislike track [%s]: %s", msg.track.Id, msg.err)
 		m.tracker.ShowError("dislike")
 		return nil
 	}

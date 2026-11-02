@@ -48,6 +48,29 @@ func TestProccessRequestReturnsDecodeError(t *testing.T) {
 	}
 }
 
+func TestProccessRequestAcceptsStringExecDurationMillis(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"invocationInfo":{"hostname":"h","req-id":"r1","exec-duration-millis":"42"},"result":{"revision":293}}`)
+	}))
+	defer srv.Close()
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := proccessRequest[map[string]any](req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rev, ok := result["revision"]
+	if !ok {
+		t.Fatalf("result=%v, want revision", result)
+	}
+	if n, ok := rev.(float64); !ok || n != 293 {
+		t.Fatalf("revision=%v, want 293", rev)
+	}
+}
+
 func TestProccessRequestDecodesOKResult(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"invocationInfo":{"req-id":"r1"},"result":{"id":"t1"}}`)

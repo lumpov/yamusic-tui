@@ -248,12 +248,19 @@ func (m *Model) View() string {
 		tracker = lipgloss.JoinVertical(lipgloss.Left, tracker, trackTitle)
 	}
 
-	tracker = lipgloss.JoinVertical(lipgloss.Left, tracker, m.help.View(m.helpMap))
+	tracker = lipgloss.JoinVertical(lipgloss.Left, tracker, m.helpView())
 	boxWidth := m.width
 	if boxWidth < 1 {
 		boxWidth = 1
 	}
 	return style.TrackBoxStyle.Width(boxWidth).MaxWidth(boxWidth).Render(tracker)
+}
+
+func (m *Model) helpView() string {
+	if m.help.ShowAll {
+		return m.help.View(m.helpMap)
+	}
+	return wrapShortHelp(m.help, m.helpMap.ShortHelp())
 }
 
 func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {

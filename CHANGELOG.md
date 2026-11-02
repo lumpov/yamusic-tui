@@ -26,6 +26,8 @@
 
 ### Исправлено
 
+- Dislike: ответ `POST /users/{id}/dislikes/tracks/add-multiple` с `exec-duration-millis` строкой больше не даёт ошибку разбора JSON после успешного 200 ([#32](https://github.com/lumpov/yamusic-tui/pull/32)).
+- Подсказки: `? show keys` в левом блоке рядом с `+ up` / `- down`. Короткая справка плеера переносится по ширине блока ([#32](https://github.com/lumpov/yamusic-tui/pull/32)).
 - Медиакнопки: `OnVolume` передаёт громкость плеера. MPRIS шлёт `PropertiesChanged` Volume. Windows ставит `MediaPlayer.Volume` у SMTC-плеера. Darwin Now Playing не имеет поля громкости ([#31](https://github.com/lumpov/yamusic-tui/pull/31)).
 - `GET_SHUFFLE` возвращает флаг после перемешивания, а не всегда `false`. `SET_SHUFFLE false` сбрасывает флаг без обратной перестановки. MPRIS: свойства Shuffle, Darwin `changeShuffleModeCommand` ([#31](https://github.com/lumpov/yamusic-tui/pull/31)).
 - MPRIS `OpenUri` открывает `https://music.yandex.ru/album/{id}/track/{id}` из уже загруженных плейлистов. `SetRate(0)` ставит паузу, другие значения (при MinimumRate=MaximumRate=1) не меняют скорость ([#31](https://github.com/lumpov/yamusic-tui/pull/31)).

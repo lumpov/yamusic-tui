@@ -23,6 +23,11 @@ type menuBlock struct {
 	err   error
 }
 
+type idsBlock struct {
+	ids []string
+	err error
+}
+
 func (m *Model) initialLoad() {
 	m.tracker.HideError()
 	m.playlists.Reset()
@@ -53,15 +58,17 @@ func (m *Model) initialLoad() {
 		likedAlbumsMenuBlock   menuBlock
 		pinnedAlbumsMenuBlock  menuBlock
 		userPlaylistsMenuBlock menuBlock
+		dislikedTracksIdsBlock idsBlock
 	)
 
-	wg.Add(6)
+	wg.Add(7)
 	go m.loadMyWave(&wg, &myWaveMenuBlock)
 	go m.loadLocalTracks(&wg, &localTracksMenuBlock)
 	go m.loadLikedTracks(&wg, &likedTracksMenuBlock)
 	go m.loadLikedAlbums(&wg, &likedAlbumsMenuBlock)
 	go m.loadPinnedAlbums(&wg, &pinnedAlbumsMenuBlock)
 	go m.loadUserPlaylists(&wg, &userPlaylistsMenuBlock)
+	go m.loadDislikedTracks(&wg, &dislikedTracksIdsBlock)
 	wg.Wait()
 
 	if myWaveMenuBlock.err == nil {
@@ -98,6 +105,14 @@ func (m *Model) initialLoad() {
 	} else {
 		log.Print(log.LVL_ERROR, "failed to obtain liked tracks: %s", likedTracksMenuBlock.err)
 		m.tracker.ShowError("liked tracks")
+	}
+
+	if dislikedTracksIdsBlock.err == nil {
+		for _, id := range dislikedTracksIdsBlock.ids {
+			m.dislikedTracksMap[id] = true
+		}
+	} else {
+		log.Print(log.LVL_ERROR, "failed to obtain disliked tracks: %s", dislikedTracksIdsBlock.err)
 	}
 
 	if likedAlbumsMenuBlock.err == nil {
@@ -201,6 +216,25 @@ func (m *Model) loadLikedTracks(wg *sync.WaitGroup, block *menuBlock) {
 
 	st := &playlist.Item{Name: "tracks", Kind: playlist.LIKES, Active: len(tracks) > 0, Subitem: true, Tracks: tracks}
 	block.items = append(block.items, st)
+}
+
+func (m *Model) loadDislikedTracks(wg *sync.WaitGroup, block *idsBlock) {
+	defer wg.Done()
+
+	if m.client == nil {
+		return
+	}
+
+	dislikes, err := m.client.DislikedTracks()
+	if err != nil {
+		block.err = err
+		return
+	}
+
+	block.ids = make([]string, len(dislikes))
+	for i, tr := range dislikes {
+		block.ids[i] = tr.Id
+	}
 }
 
 func (m *Model) loadLikedAlbums(wg *sync.WaitGroup, block *menuBlock) {

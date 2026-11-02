@@ -576,6 +576,20 @@ func (client *YaMusicClient) UnlikeTrack(trackId string) (err error) {
 	return
 }
 
+func (client *YaMusicClient) DislikedTracks() (tracks []LikeTrackInfo, err error) {
+	desc, _, err := getRequest[LikesDesc](client.token, fmt.Sprintf("/users/%d/dislikes/tracks", client.userid), nil)
+	if err != nil {
+		return
+	}
+	tracks = desc.Library.Tracks
+	return
+}
+
+func (client *YaMusicClient) DislikeTrack(trackId string) (err error) {
+	_, _, err = postRequest[interface{}](client.token, fmt.Sprintf("/users/%d/dislikes/tracks/add-multiple", client.userid), url.Values{"track-ids": {trackId}})
+	return
+}
+
 func (client *YaMusicClient) TrackDownloadInfo(trackId string) (dowInfos []TrackDownloadInfo, err error) {
 	dowInfos, _, err = getRequest[[]TrackDownloadInfo](client.token, fmt.Sprintf("/tracks/%s/download-info", trackId), nil)
 	return

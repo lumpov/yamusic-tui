@@ -24,6 +24,7 @@ The easiest way to get a token is to use a browser extension ([Chrome](https://c
     - [x] Play progress
     - [x] Rewind
     - [x] Like/unlike
+    - [x] Dislike
     - [x] Share
     - [x] Synced lyrics
  - [ ] Radio
@@ -108,6 +109,7 @@ controls:
    player-rewind-forward: shift+right
    player-rewind-backward: shift+left
    player-like: L
+   player-dislike: d
    player-cache: S
    player-vol-up: ']'
    player-vol-down: '['
@@ -124,6 +126,7 @@ style:
       stop: ■
       liked: 💛
       not-liked: 🤍
+      disliked: 💔
       cached: 💿
       lyrics-dot: •
       volume-off: 🔇

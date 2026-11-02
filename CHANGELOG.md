@@ -9,6 +9,7 @@
 
 ### Добавлено
 
+- Дизлайк текущего трека клавишей `d` (`player-dislike`). `POST /users/{id}/dislikes/tracks/add-multiple`, rotor-событие `dislike`, снятие лайка, переход на следующий трек. Иконка `💔` в плеере и списке; ширина блока ограничена шириной окна. Клавиша `d` не пересекается с `down`, `D` и остальными default-клавишами; MPRIS, SMTC и Darwin Now Playing `d` не перехватывают ([#32](https://github.com/lumpov/yamusic-tui/pull/32)).
 - `playbacktrace`: события воспроизведения в памяти, сброс в `$TMPDIR/yamusic-tui/yamusic-tui.log` при смене трека и выходе. По умолчанию выключен (`Enabled = false`) ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
 - Sentry: DSN в `sentry-dsn` (`config.yaml`). Пустое значение — Sentry выключен. В issues уходят panic, `log.LVL_PANIC`, поломка JSON Yandex Music API и HTTP ≥ 500. INFO/WARN, 404 текстов, 400/401 не создают issue. Токен пишется как `02kdsjh...kjds8`. В событии: версия приложения, GOOS/GOARCH, Go, hostname, cache-tracks, lyrics, buffer, rewind ([#14](https://github.com/lumpov/yamusic-tui/pull/14)).
 
@@ -25,6 +26,8 @@
 
 ### Исправлено
 
+- Dislike: ответ `POST /users/{id}/dislikes/tracks/add-multiple` с `exec-duration-millis` строкой больше не даёт ошибку разбора JSON после успешного 200 ([#32](https://github.com/lumpov/yamusic-tui/pull/32)).
+- Подсказки: `? show keys` в левом блоке рядом с `+ up` / `- down`. Короткая справка плеера переносится по ширине блока ([#32](https://github.com/lumpov/yamusic-tui/pull/32)).
 - Медиакнопки: `OnVolume` передаёт громкость плеера. MPRIS шлёт `PropertiesChanged` Volume. Windows ставит `MediaPlayer.Volume` у SMTC-плеера. Darwin Now Playing не имеет поля громкости ([#31](https://github.com/lumpov/yamusic-tui/pull/31)).
 - `GET_SHUFFLE` возвращает флаг после перемешивания, а не всегда `false`. `SET_SHUFFLE false` сбрасывает флаг без обратной перестановки. MPRIS: свойства Shuffle, Darwin `changeShuffleModeCommand` ([#31](https://github.com/lumpov/yamusic-tui/pull/31)).
 - MPRIS `OpenUri` открывает `https://music.yandex.ru/album/{id}/track/{id}` из уже загруженных плейлистов. `SetRate(0)` ставит паузу, другие значения (при MinimumRate=MaximumRate=1) не меняют скорость ([#31](https://github.com/lumpov/yamusic-tui/pull/31)).

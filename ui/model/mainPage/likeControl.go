@@ -102,6 +102,7 @@ func (m *Model) applyLike(msg likeReadyMsg) tea.Cmd {
 		likedPlaylist.RemoveTrack(msg.track.Id)
 	} else {
 		m.likedTracksMap[msg.track.Id] = true
+		delete(m.dislikedTracksMap, msg.track.Id)
 		likedPlaylist.AddTrack(&msg.track)
 	}
 

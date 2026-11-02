@@ -113,3 +113,23 @@ func TestCacheKeyDoesNotWaitBufferAll(t *testing.T) {
 		t.Fatal("S must emit CACHE_TRACK")
 	}
 }
+
+func TestDEmitsDislike(t *testing.T) {
+	config.InitTest(t)
+	m := NewForTest()
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	if cmd == nil {
+		t.Fatal("d must emit dislike")
+	}
+	msg := cmd()
+	if msg != DISLIKE {
+		t.Fatalf("d emitted %v, want DISLIKE", msg)
+	}
+
+	before := m.volume
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'D'}})
+	if m.volume != before {
+		t.Fatal("D must not change player state")
+	}
+}

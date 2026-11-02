@@ -81,3 +81,28 @@ func TestApplyLikeAddsTrack(t *testing.T) {
 		t.Fatalf("likes tracks: %+v", got)
 	}
 }
+
+func TestApplyLikeRemovesDislike(t *testing.T) {
+	config.InitTest(t)
+	likes := map[string]bool{}
+	cache := map[string]bool{}
+	likesPl := &playlist.Item{Name: "likes", Kind: playlist.LIKES, Active: true}
+	playlists := playlist.New(nil)
+	_ = playlists.SetItems([]*playlist.Item{likesPl})
+	playlists.Select(0)
+
+	m := &Model{
+		playlists:            playlists,
+		tracker:              tracker.New(nil, &likes),
+		tracklist:            tracklist.New(nil, &likes, &cache),
+		likedTracksMap:       likes,
+		dislikedTracksMap:    map[string]bool{"1": true},
+		cachedTracksMap:      cache,
+		likeGen:              1,
+		currentPlaylistIndex: -1,
+	}
+	m.applyLike(likeReadyMsg{gen: 1, track: api.Track{Id: "1", Title: "t"}})
+	if m.dislikedTracksMap["1"] {
+		t.Fatal("like must remove dislike")
+	}
+}

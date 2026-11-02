@@ -43,9 +43,9 @@ func (e UnauthorizedError) Error() string {
 }
 
 type InvocInfo struct {
-	ExecDurationMillis int    `json:"exec-duration-millis"`
-	Hostname           string `json:"hostname"`
-	ReqId              string `json:"req-id"`
+	ExecDurationMillis json.RawMessage `json:"exec-duration-millis"`
+	Hostname           string          `json:"hostname"`
+	ReqId              string          `json:"req-id"`
 }
 
 type Pager struct {

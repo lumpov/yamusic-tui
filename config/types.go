@@ -43,6 +43,7 @@ type Icons struct {
 	Stop       string `yaml:"stop"`
 	Liked      string `yaml:"liked"`
 	NotLiked   string `yaml:"not-liked"`
+	Disliked   string `yaml:"disliked"`
 	Cached     string `yaml:"cached"`
 	LyricsDot  string `yaml:"lyrics-dot"`
 	VolumeOff  string `yaml:"volume-off"`
@@ -111,6 +112,7 @@ type Controls struct {
 	PlayerRewindForward  *Key `yaml:"player-rewind-forward"`
 	PlayerRewindBackward *Key `yaml:"player-rewind-backward"`
 	PlayerLike           *Key `yaml:"player-like"`
+	PlayerDislike        *Key `yaml:"player-dislike"`
 	PlayerCache          *Key `yaml:"player-cache"`
 	PlayerVolUp          *Key `yaml:"player-vol-up"`
 	PlayerVolDown        *Key `yaml:"player-vol-down"`
@@ -187,6 +189,7 @@ var defaultConfig = Config{
 		PlayerRewindForward:      NewKey("shift+right"),
 		PlayerRewindBackward:     NewKey("shift+left"),
 		PlayerLike:               NewKey("L"),
+		PlayerDislike:            NewKey("d"),
 		PlayerToggleLyrics:       NewKey("t"),
 		PlayerCache:              NewKey("S"),
 		PlayerVolUp:              NewKey("]"),
@@ -204,6 +207,7 @@ var defaultConfig = Config{
 			Stop:       "■",
 			Liked:      "💛",
 			NotLiked:   "🤍",
+			Disliked:   "💔",
 			Cached:     "💿",
 			LyricsDot:  "•",
 			VolumeOff:  "🔇",

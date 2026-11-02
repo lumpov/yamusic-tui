@@ -13,8 +13,9 @@ import (
 )
 
 type ItemDelegate struct {
-	likesMap *map[string]bool
-	cacheMap *map[string]bool
+	likesMap    *map[string]bool
+	cacheMap    *map[string]bool
+	dislikesMap *map[string]bool
 }
 
 func (d ItemDelegate) Height() int {
@@ -45,6 +46,9 @@ func (d ItemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 
 		addInfoLen := lipgloss.Width(albumMeta)
 		maxLen := m.Width() - addInfoLen - 2
+		if maxLen < 2 {
+			maxLen = 2
+		}
 		clip := lipgloss.NewStyle().MaxWidth(maxLen - 1)
 
 		var albumTitle string
@@ -105,20 +109,28 @@ func (d ItemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 		))
 
 		var trackLike string
-		if (*d.likesMap)[item.Track.Id] {
+		if d.likesMap != nil && (*d.likesMap)[item.Track.Id] {
 			trackLike = style.IconLiked
 		} else {
 			trackLike = style.IconNotLiked
 		}
 
+		var trackDislike string
+		if d.dislikesMap != nil && (*d.dislikesMap)[item.Track.Id] {
+			trackDislike = style.IconDisliked + " "
+		}
+
 		var trackCache string
-		if (*d.cacheMap)[item.Track.Id] {
+		if d.cacheMap != nil && (*d.cacheMap)[item.Track.Id] {
 			trackCache = style.IconCached
 		}
 
-		trackAddInfo := style.TrackAddInfoStyle.Render(trackCache + " " + trackLike + " " + trackTime)
+		trackAddInfo := style.TrackAddInfoStyle.Render(trackCache + " " + trackDislike + trackLike + " " + trackTime)
 		addInfoLen := lipgloss.Width(trackAddInfo)
 		maxLen := m.Width() - addInfoLen - 2
+		if maxLen < 2 {
+			maxLen = 2
+		}
 		clip := lipgloss.NewStyle().MaxWidth(maxLen - 1)
 
 		trackTitleLen := lipgloss.Width(trackTitle)

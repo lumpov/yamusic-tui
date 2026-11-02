@@ -38,6 +38,7 @@ type Model struct {
 	list          list.Model
 	help          help.Model
 	helpMap       *helpKeyMap
+	delegate      ItemDelegate
 	width, height int
 	Hidden        bool
 	Title         string
@@ -54,7 +55,8 @@ func New(p *tea.Program, likesMap *map[string]bool, cacheMap *map[string]bool) *
 
 	controls := config.Current.Controls
 
-	m.list = list.New([]list.Item{}, ItemDelegate{likesMap: likesMap, cacheMap: cacheMap}, 512, 512)
+	m.delegate = ItemDelegate{likesMap: likesMap, cacheMap: cacheMap}
+	m.list = list.New([]list.Item{}, m.delegate, 512, 512)
 	m.list.Styles.Title = style.TrackListTitleStyle
 	m.list.KeyMap = list.KeyMap{
 		CursorUp:   key.NewBinding(controls.CursorUp.Binding(), controls.CursorUp.Help("up")),
@@ -82,8 +84,12 @@ func (m *Model) View() string {
 	}
 
 	titleLen := lipgloss.Width(m.Title)
-	if titleLen > m.width-8 {
-		m.list.Title = lipgloss.NewStyle().MaxWidth(m.width-9).Render(m.Title) + "…"
+	titleMax := m.width - 8
+	if titleMax < 2 {
+		titleMax = 2
+	}
+	if titleLen > titleMax {
+		m.list.Title = lipgloss.NewStyle().MaxWidth(titleMax-1).Render(m.Title) + "…"
 	} else {
 		m.list.Title = m.Title
 	}
@@ -115,7 +121,11 @@ func (m *Model) View() string {
 		listView = listView[:lastLine] + "\n" + listView[lastLine:]
 	}
 
-	return style.TrackBoxStyle.Width(m.width).Render(lipgloss.JoinVertical(lipgloss.Left, listView, "", helpView))
+	boxWidth := m.width
+	if boxWidth < 1 {
+		boxWidth = 1
+	}
+	return style.TrackBoxStyle.Width(boxWidth).MaxWidth(boxWidth).Render(lipgloss.JoinVertical(lipgloss.Left, listView, "", helpView))
 }
 
 func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
@@ -224,16 +234,27 @@ func (m *Model) Select(index int) {
 }
 
 func (m *Model) SetSize(w, h int) {
-	m.width = w
-	m.help.Width = m.width - 4
-	m.list.SetWidth(m.width - 6)
+	m.SetWidth(w)
 	m.SetHeight(h)
+}
+
+func (m *Model) SetDislikesMap(dislikes *map[string]bool) {
+	m.delegate.dislikesMap = dislikes
+	m.list.SetDelegate(m.delegate)
 }
 
 func (m *Model) SetWidth(w int) {
 	m.width = w
-	m.help.Width = m.width - 4
-	m.list.SetWidth(m.width - 6)
+	helpWidth := m.width - 4
+	if helpWidth < 1 {
+		helpWidth = 1
+	}
+	m.help.Width = helpWidth
+	listWidth := m.width - 6
+	if listWidth < 1 {
+		listWidth = 1
+	}
+	m.list.SetWidth(listWidth)
 }
 
 func (m *Model) Width() int {

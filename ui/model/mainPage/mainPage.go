@@ -49,14 +49,16 @@ type Model struct {
 	playQueueTrackIndex  int
 	playGen              int
 	likeGen              int
+	dislikeGen           int
 	playlistGen          int
 	cacheGen             int
 	currentPlaylistIndex int
 	currentAlbumIndex    int
 
-	likedTracksMap  map[string]bool
-	cachedTracksMap map[string]bool
-	shuffleOn       bool
+	likedTracksMap    map[string]bool
+	dislikedTracksMap map[string]bool
+	cachedTracksMap   map[string]bool
+	shuffleOn         bool
 }
 
 // mainpage.Model constructor.
@@ -68,11 +70,14 @@ func New(mediaHandler handler.MediaHandler) *Model {
 	m.clipboard = clipboard.New()
 	m.mediaHandler = mediaHandler
 	m.likedTracksMap = make(map[string]bool)
+	m.dislikedTracksMap = make(map[string]bool)
 	m.cachedTracksMap = make(map[string]bool)
 	m.spinner = spinner.New(spinner.WithSpinner(spinner.Points))
 	m.playlists = playlist.New(m.program)
 	m.tracklist = tracklist.New(m.program, &m.likedTracksMap, &m.cachedTracksMap)
+	m.tracklist.SetDislikesMap(&m.dislikedTracksMap)
 	m.tracker = tracker.New(m.program, &m.likedTracksMap)
+	m.tracker.SetDislikesMap(&m.dislikedTracksMap)
 	m.searchDialog = search.New()
 	m.inputDialog = input.New()
 	m.uiFocused = true
@@ -161,6 +166,8 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case likeReadyMsg:
 		return m, m.applyLike(msg)
+	case dislikeReadyMsg:
+		return m, m.applyDislike(msg)
 	case addPlaylistReadyMsg:
 		return m, m.applyAddPlaylist(msg)
 	case renamePlaylistReadyMsg:
@@ -344,6 +351,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.prevTrack())
 		case tracker.LIKE:
 			cmd = m.likePlayingTrack()
+			cmds = append(cmds, cmd)
+		case tracker.DISLIKE:
+			cmd = m.dislikePlayingTrack()
 			cmds = append(cmds, cmd)
 		case tracker.PLAY:
 			if m.tracker.IsStoped() {

@@ -30,6 +30,7 @@ const (
 	NEXT
 	PREV
 	LIKE
+	DISLIKE
 	REWIND
 	VOLUME
 	CACHE_TRACK
@@ -92,8 +93,9 @@ type Model struct {
 	player            audioPlayer
 	trackWrapper      *readWrapper
 
-	program  *tea.Program
-	likesMap *map[string]bool
+	program     *tea.Program
+	likesMap    *map[string]bool
+	dislikesMap *map[string]bool
 }
 
 func New(p *tea.Program, likesMap *map[string]bool) *Model {
@@ -163,7 +165,11 @@ func (m *Model) View() string {
 		volumeIndicatorWidth = lipgloss.Width(volumeIndicator)
 	}
 
-	m.progress.Width = m.width - volumeIndicatorWidth - 9
+	progressWidth := m.width - volumeIndicatorWidth - 9
+	if progressWidth < 1 {
+		progressWidth = 1
+	}
+	m.progress.Width = progressWidth
 	tracker := style.TrackProgressStyle.Render(m.progress.ViewAs(m.positionPercent()))
 	tracker = lipgloss.JoinHorizontal(lipgloss.Top, playButton, tracker, volumeIndicator)
 
@@ -201,15 +207,23 @@ func (m *Model) View() string {
 		))
 
 		var trackLike string
-		if (*m.likesMap)[m.track.Id] {
+		if m.likesMap != nil && (*m.likesMap)[m.track.Id] {
 			trackLike = style.IconLiked + " "
 		} else {
 			trackLike = style.IconNotLiked + " "
 		}
 
-		trackAddInfo := style.TrackAddInfoStyle.Render(trackLike + trackTime)
+		var trackDislike string
+		if m.isDisliked(m.track.Id) {
+			trackDislike = style.IconDisliked + " "
+		}
+
+		trackAddInfo := style.TrackAddInfoStyle.Render(trackDislike + trackLike + trackTime)
 		addInfoLen := lipgloss.Width(trackAddInfo)
 		maxLen := m.Width() - addInfoLen - 4
+		if maxLen < 2 {
+			maxLen = 2
+		}
 		stl := lipgloss.NewStyle().MaxWidth(maxLen - 1)
 
 		trackTitleLen := lipgloss.Width(trackTitle)
@@ -235,7 +249,11 @@ func (m *Model) View() string {
 	}
 
 	tracker = lipgloss.JoinVertical(lipgloss.Left, tracker, m.help.View(m.helpMap))
-	return style.TrackBoxStyle.Width(m.width).Render(tracker)
+	boxWidth := m.width
+	if boxWidth < 1 {
+		boxWidth = 1
+	}
+	return style.TrackBoxStyle.Width(boxWidth).MaxWidth(boxWidth).Render(tracker)
 }
 
 func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
@@ -278,6 +296,9 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 
 		case controls.PlayerLike.Contains(keypress):
 			cmds = append(cmds, model.Cmd(LIKE))
+
+		case controls.PlayerDislike.Contains(keypress):
+			cmds = append(cmds, model.Cmd(DISLIKE))
 
 		case controls.PlayerCache.Contains(keypress):
 			if !m.IsStoped() {
@@ -356,11 +377,23 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 
 func (m *Model) SetWidth(width int) {
 	m.width = width
-	m.help.Width = width - 4
+	helpWidth := width - 4
+	if helpWidth < 1 {
+		helpWidth = 1
+	}
+	m.help.Width = helpWidth
 }
 
 func (m *Model) Width() int {
 	return m.width
+}
+
+func (m *Model) SetDislikesMap(dislikes *map[string]bool) {
+	m.dislikesMap = dislikes
+}
+
+func (m *Model) isDisliked(trackId string) bool {
+	return m.dislikesMap != nil && (*m.dislikesMap)[trackId]
 }
 
 func (m *Model) Height() int {

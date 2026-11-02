@@ -36,6 +36,7 @@ var (
 	IconStop       = "■"
 	IconLiked      = "💛"
 	IconNotLiked   = "🤍"
+	IconDisliked   = "💔"
 	IconCached     = "💿"
 	IconDotLight   = "•"
 	IconDotDark    = "•"
@@ -111,6 +112,7 @@ func Apply(style *config.Style) {
 	IconStop = style.Icons.Stop
 	IconLiked = style.Icons.Liked
 	IconNotLiked = style.Icons.NotLiked
+	IconDisliked = style.Icons.Disliked
 	IconCached = style.Icons.Cached
 	IconDotLight = lipgloss.NewStyle().Foreground(LyricsCurrentTextColor).Render(style.Icons.LyricsDot)
 	IconDotDark = lipgloss.NewStyle().Foreground(LyricsPreviosTextColor).Render(style.Icons.LyricsDot)

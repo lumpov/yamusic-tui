@@ -9,6 +9,7 @@
 
 ### Добавлено
 
+- Дизлайк текущего трека клавишей `d` (`player-dislike`). `POST /users/{id}/dislikes/tracks/add-multiple`, rotor-событие `dislike`, снятие лайка, переход на следующий трек. Иконка `💔` в плеере и списке; ширина блока ограничена шириной окна. Клавиша `d` не пересекается с `down`, `D` и остальными default-клавишами; MPRIS, SMTC и Darwin Now Playing `d` не перехватывают.
 - `playbacktrace`: события воспроизведения в памяти, сброс в `$TMPDIR/yamusic-tui/yamusic-tui.log` при смене трека и выходе. По умолчанию выключен (`Enabled = false`) ([#23](https://github.com/lumpov/yamusic-tui/pull/23)).
 - Sentry: DSN в `sentry-dsn` (`config.yaml`). Пустое значение — Sentry выключен. В issues уходят panic, `log.LVL_PANIC`, поломка JSON Yandex Music API и HTTP ≥ 500. INFO/WARN, 404 текстов, 400/401 не создают issue. Токен пишется как `02kdsjh...kjds8`. В событии: версия приложения, GOOS/GOARCH, Go, hostname, cache-tracks, lyrics, buffer, rewind ([#14](https://github.com/lumpov/yamusic-tui/pull/14)).
 

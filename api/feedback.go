@@ -69,7 +69,7 @@ func NewTrackFeedbackEvent(evType TrackEventType, track *Track, playedSeconds fl
 		Timestamp:          nowTimestamp(),
 		TotalPlayedSeconds: playedSeconds,
 		TrackLengthSeconds: float64(track.DurationMs) / 1000.0,
-		TrackId:            trackRef(track),
+		TrackId            trackRef(track),
 		Type:               string(evType),
 	}
 }

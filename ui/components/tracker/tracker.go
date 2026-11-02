@@ -10,6 +10,7 @@ import (
 	"github.com/dece2183/yamusic-tui/config"
 	"github.com/dece2183/yamusic-tui/log"
 	"github.com/dece2183/yamusic-tui/playbacktrace"
+	"github.com/dece2183/yamusic-tui/powerwatch"
 	"github.com/dece2183/yamusic-tui/stream"
 	"github.com/dece2183/yamusic-tui/ui/helpers"
 	"github.com/dece2183/yamusic-tui/ui/model"
@@ -48,6 +49,7 @@ func (p ProgressControl) Value() float64 {
 
 const (
 	_VOLUME_FADE_STEPS     = 2
+	_POWER_FADE_STEPS      = 20
 	_VOLUME_SNAP_THRESHOLD = 0.005
 	_VOLUME_FADE_PERIOD    = 60 * time.Millisecond
 	_REWIND_SETTLE         = 200 * time.Millisecond
@@ -92,6 +94,10 @@ type Model struct {
 	audio             audioBackend
 	player            audioPlayer
 	trackWrapper      *readWrapper
+	pausedByPower     bool
+	powerFade         bool
+	locked            bool
+	displayOff        bool
 
 	program     *tea.Program
 	likesMap    *map[string]bool
@@ -279,6 +285,7 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 			m.help.ShowAll = !m.help.ShowAll
 
 		case controls.PlayerPause.Contains(keypress):
+			m.clearPowerPause()
 			if m.player != nil && m.player.IsPlaying() {
 				m.Pause()
 				cmds = append(cmds, model.Cmd(PAUSE))
@@ -323,19 +330,24 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 		case controls.PlayerHide.Contains(keypress):
 			m.Hidden = !m.Hidden
 			cmds = append(cmds, model.Cmd(TOGGLE_VIEW))
+		case controls.PlayerMode.Contains(keypress):
+			cmds = append(cmds, m.togglePlayerMode())
 		}
 
 	// player control update
 	case Control:
 		switch msg {
 		case PLAY:
+			m.clearPowerPause()
 			m.Play()
 			cmds = append(cmds, m.startPlayheadTick())
 		case PAUSE:
+			m.clearPowerPause()
 			m.Pause()
 		case STOP:
 			m.Stop()
 		case PLAYPAUSE:
+			m.clearPowerPause()
 			if m.player != nil && m.player.IsPlaying() {
 				m.Pause()
 			} else {
@@ -356,6 +368,11 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 
 	case volumeFadeTickMsg:
 		m.volumeFadeTick()
+
+	case powerwatch.Event:
+		if cmd := m.applyPowerEvent(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 
 	// track progress update
 	case ProgressControl:
@@ -533,6 +550,8 @@ func (m *Model) StartTrack(track *api.Track, reader *stream.BufferedStream, lyri
 	m.player.Play()
 	m.lyrics = lyrics
 	m.paused = false
+	m.pausedByPower = false
+	m.powerFade = false
 	m.playtime = 0
 	m.playStarted = time.Now()
 	m.playheadOrigin = 0
@@ -597,7 +616,9 @@ func (m *Model) Play() {
 		return
 	}
 	m.volume = config.Current.Volume
-	m.volumeIncremet = m.volume / _VOLUME_FADE_STEPS
+	if !m.powerFade {
+		m.volumeIncremet = m.volume / _VOLUME_FADE_STEPS
+	}
 	m.player.SetVolume(0)
 	m.player.Play()
 	m.paused = false
@@ -767,7 +788,94 @@ func (m *Model) volumeFadeTick() {
 		if m.paused {
 			m.player.Pause()
 		}
+		m.powerFade = false
 	}
+}
+
+func (m *Model) clearPowerPause() {
+	m.pausedByPower = false
+	m.powerFade = false
+	if m.volume > 0 {
+		m.volumeIncremet = m.volume / _VOLUME_FADE_STEPS
+	}
+}
+
+func (m *Model) sessionLocked() bool {
+	return m.locked || powerwatch.ScreenLocked()
+}
+
+func (m *Model) applyPowerEvent(ev powerwatch.Event) tea.Cmd {
+	switch ev {
+	case powerwatch.DisplayOff:
+		m.displayOff = true
+	case powerwatch.DisplayOn:
+		m.displayOff = false
+	case powerwatch.SessionLocked:
+		m.locked = true
+	case powerwatch.SessionUnlocked:
+		m.locked = false
+	}
+	if !config.IsWhenActive() {
+		return nil
+	}
+	switch ev {
+	case powerwatch.DisplayOff:
+		return m.powerPause()
+	case powerwatch.DisplayOn:
+		if !m.sessionLocked() {
+			return m.powerResume()
+		}
+	case powerwatch.SessionUnlocked:
+		return m.powerResume()
+	}
+	return nil
+}
+
+func (m *Model) powerPause() tea.Cmd {
+	if m.player == nil || !m.player.IsPlaying() || m.paused {
+		return nil
+	}
+	m.powerFade = true
+	if m.volume > 0 {
+		m.volumeIncremet = m.volume / _POWER_FADE_STEPS
+	}
+	m.pausedByPower = true
+	m.Pause()
+	return nil
+}
+
+func (m *Model) powerResume() tea.Cmd {
+	if !m.pausedByPower {
+		return nil
+	}
+	m.pausedByPower = false
+	m.powerFade = true
+	if m.volume > 0 {
+		m.volumeIncremet = m.volume / _POWER_FADE_STEPS
+	}
+	if m.player != nil && m.player.IsPlaying() {
+		m.paused = false
+		m.playStarted = time.Now()
+		return m.startPlayheadTick()
+	}
+	m.Play()
+	return m.startPlayheadTick()
+}
+
+func (m *Model) togglePlayerMode() tea.Cmd {
+	config.TogglePlayerMode()
+	var extra tea.Cmd
+	if config.IsWhenActive() {
+		if m.displayOff {
+			extra = m.powerPause()
+		}
+	} else if m.pausedByPower {
+		extra = m.powerResume()
+	}
+	if extra != nil {
+		return tea.Batch(saveConfigCmd(), extra)
+	}
+	return saveConfigCmd()
 }
 
 func (m *Model) needsVolumeFade() bool {

@@ -9,6 +9,7 @@ import (
 	"github.com/dece2183/yamusic-tui/api"
 	"github.com/dece2183/yamusic-tui/config"
 	"github.com/dece2183/yamusic-tui/media/handler"
+	"github.com/dece2183/yamusic-tui/powerwatch"
 	"github.com/dece2183/yamusic-tui/ui/components/input"
 	"github.com/dece2183/yamusic-tui/ui/components/playlist"
 	"github.com/dece2183/yamusic-tui/ui/components/search"
@@ -90,9 +91,13 @@ func New(mediaHandler handler.MediaHandler) *Model {
 //
 
 func (m *Model) Run() error {
+	powerwatch.Start(func(e powerwatch.Event) {
+		m.program.Send(e)
+	})
 	go m.mediaHandle()
 	m.removeCoverFiles()
 	_, err := m.program.Run()
+	powerwatch.Stop()
 	m.tracker.Stop()
 	m.removeCoverFiles()
 	return err
@@ -407,6 +412,15 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		if m.mediaHandler != nil {
 			m.mediaHandler.OnVolume(m.tracker.Volume())
+		}
+	case powerwatch.Event:
+		wasPlaying := m.tracker.IsPlaying()
+		m.tracker, cmd = m.tracker.Update(message)
+		cmds = append(cmds, cmd)
+		nowPlaying := m.tracker.IsPlaying()
+		m.indicateCurrentTrackPlaying(nowPlaying)
+		if wasPlaying != nowPlaying && m.mediaHandler != nil && !m.tracker.IsStoped() {
+			m.mediaHandler.OnPlayPause(nowPlaying)
 		}
 	case mediaShuffleMsg:
 		if !msg.on {

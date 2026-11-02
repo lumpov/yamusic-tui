@@ -91,6 +91,33 @@ func TestPlayerDislikeIsDAndUnique(t *testing.T) {
 	}
 }
 
+func TestPlayerModeKeyIsMAndUnique(t *testing.T) {
+	InitTest(t)
+
+	if Current.Controls.PlayerMode == nil || !Current.Controls.PlayerMode.Contains("m") {
+		t.Fatalf("player-mode: want m, keys=%v", Current.Controls.PlayerMode)
+	}
+
+	owners := map[string]string{}
+	v := reflect.ValueOf(Current.Controls).Elem()
+	typ := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		k, ok := v.Field(i).Interface().(*Key)
+		if !ok || k == nil {
+			continue
+		}
+		for _, name := range k.keyNames {
+			if other, exists := owners[name]; exists {
+				t.Errorf("key %q belongs to %s and %s", name, other, typ.Field(i).Name)
+			}
+			owners[name] = typ.Field(i).Name
+		}
+	}
+	if owners["m"] != "PlayerMode" {
+		t.Fatalf("m owner=%q, want PlayerMode", owners["m"])
+	}
+}
+
 func TestPlayerDislikeFilledWhenMissing(t *testing.T) {
 	home := withHome(t)
 	dir := filepath.Join(home, ".config", DirName)

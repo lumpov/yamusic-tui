@@ -37,6 +37,41 @@ func TestDisplayPlaylistPinnedAlbumDoesNotPanic(t *testing.T) {
 	m.displayPlaylist(pl)
 }
 
+func TestDisplayPlaylistPinnedWaveUsesName(t *testing.T) {
+	if err := config.InitialLoad(); err != nil {
+		t.Fatalf("config init: %v", err)
+	}
+
+	likes := make(map[string]bool)
+	cache := make(map[string]bool)
+
+	m := &Model{
+		tracklist: tracklist.New(nil, &likes, &cache),
+	}
+
+	m.displayPlaylist(&playlist.Item{
+		Name:   "Chōchin",
+		Kind:   playlist.MYWAVE,
+		Active: true,
+		Rotor:  true,
+		Tracks: []api.Track{{Id: "1", Title: "track"}},
+	})
+	if m.tracklist.Title != "Chōchin" {
+		t.Fatalf("title=%q, want Chōchin", m.tracklist.Title)
+	}
+
+	m.displayPlaylist(&playlist.Item{
+		Name:   "my wave",
+		Kind:   playlist.MYWAVE,
+		Active: true,
+		Rotor:  true,
+		Tracks: []api.Track{{Id: "1", Title: "track"}},
+	})
+	if m.tracklist.Title != "My wave" {
+		t.Fatalf("title=%q, want My wave", m.tracklist.Title)
+	}
+}
+
 func TestShufflePlaylistCurrentTrackOutOfRange(t *testing.T) {
 	config.InitTest(t)
 	likes := make(map[string]bool)

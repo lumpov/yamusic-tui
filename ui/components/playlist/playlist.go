@@ -160,6 +160,15 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 				}
 				m.list.CursorDown()
 			}
+			if item, ok := m.list.SelectedItem().(*Item); ok && !item.Active && item.Kind == NONE {
+				for m.list.Index() > 0 {
+					it, ok := m.list.SelectedItem().(*Item)
+					if ok && it.Active {
+						break
+					}
+					m.list.CursorUp()
+				}
+			}
 
 			cmds = append(cmds, cmd)
 			cmds = append(cmds, model.Cmd(CURSOR_DOWN))

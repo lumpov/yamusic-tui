@@ -6,6 +6,7 @@ type Item struct {
 	Uid uint64
 
 	Name         string
+	Header       string
 	Kind         uint64
 	Revision     int
 	StationId    api.StationId

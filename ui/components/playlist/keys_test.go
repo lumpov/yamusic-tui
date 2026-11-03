@@ -58,3 +58,31 @@ func TestCtrlUpIsNotPlaylistShortcut(t *testing.T) {
 		t.Fatal("ctrl+down must not move playlists")
 	}
 }
+
+func TestPlaylistDownSkipsPinnedWaveHeader(t *testing.T) {
+	config.InitTest(t)
+
+	m := New(nil)
+	_ = m.SetItems([]*Item{
+		{Name: "Unfamiliar · Calm", Kind: MYWAVE, Active: true, Subitem: true, Rotor: true},
+		{Name: " My Vibe", Kind: NONE, Active: false, Subitem: true},
+		{Name: "Collection", Kind: MYWAVE, Active: true, Subitem: true, Rotor: true},
+		{Name: " My Vibe for", Kind: NONE, Active: false, Subitem: true},
+	})
+	m.Select(0)
+
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'-'}})
+	if m.Index() != 2 {
+		t.Fatalf("down from pin: index=%d, want 2", m.Index())
+	}
+
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'-'}})
+	if m.Index() != 2 {
+		t.Fatalf("down from last pin: index=%d, want 2", m.Index())
+	}
+
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}})
+	if m.Index() != 0 {
+		t.Fatalf("up from second pin: index=%d, want 0", m.Index())
+	}
+}

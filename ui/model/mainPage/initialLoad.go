@@ -58,16 +58,18 @@ func (m *Model) initialLoad() {
 		likedAlbumsMenuBlock   menuBlock
 		pinnedAlbumsMenuBlock  menuBlock
 		userPlaylistsMenuBlock menuBlock
+		pinnedWavesMenuBlock   menuBlock
 		dislikedTracksIdsBlock idsBlock
 	)
 
-	wg.Add(7)
+	wg.Add(8)
 	go m.loadMyWave(&wg, &myWaveMenuBlock)
 	go m.loadLocalTracks(&wg, &localTracksMenuBlock)
 	go m.loadLikedTracks(&wg, &likedTracksMenuBlock)
 	go m.loadLikedAlbums(&wg, &likedAlbumsMenuBlock)
 	go m.loadPinnedAlbums(&wg, &pinnedAlbumsMenuBlock)
 	go m.loadUserPlaylists(&wg, &userPlaylistsMenuBlock)
+	go m.loadPinnedWaves(&wg, &pinnedWavesMenuBlock)
 	go m.loadDislikedTracks(&wg, &dislikedTracksIdsBlock)
 	wg.Wait()
 
@@ -142,6 +144,15 @@ func (m *Model) initialLoad() {
 		m.tracker.ShowError("playlists")
 	}
 
+	if pinnedWavesMenuBlock.err == nil {
+		for _, item := range pinnedWavesMenuBlock.items {
+			m.playlists.InsertItem(-1, item)
+		}
+	} else {
+		log.Print(log.LVL_ERROR, "failed to obtain pinned waves: %s", pinnedWavesMenuBlock.err)
+		m.tracker.ShowError("pinned waves")
+	}
+
 	m.currentPlaylistIndex = -1
 	m.playlists.Select(0)
 	m.Send(LOADING_DONE)
@@ -160,7 +171,20 @@ func (m *Model) loadMyWave(wg *sync.WaitGroup, block *menuBlock) {
 		return
 	}
 
-	st := &playlist.Item{Name: "my wave", Kind: playlist.MYWAVE, Active: true, Subitem: false, Rotor: true}
+	st, err := rotorPlaylistItem("my wave", playlist.MYWAVE, false, session)
+	if err != nil {
+		block.err = err
+		return
+	}
+
+	block.items = append(block.items, st)
+}
+
+func rotorPlaylistItem(name string, kind uint64, subitem bool, session api.StationTracks) (*playlist.Item, error) {
+	if len(session.Sequence) == 0 {
+		return nil, errors.New("unable to get session tracks")
+	}
+	st := &playlist.Item{Name: name, Kind: kind, Active: true, Subitem: subitem, Rotor: true}
 	st.SessionId = session.RadioSessionId
 	st.SessionBatch = session.BatchId
 	if len(session.AcceptedSeeds) > 0 {
@@ -168,13 +192,8 @@ func (m *Model) loadMyWave(wg *sync.WaitGroup, block *menuBlock) {
 	} else {
 		st.StationId = session.Id
 	}
-	if len(session.Sequence) > 0 {
-		st.Tracks = []api.Track{session.Sequence[0].Track}
-	} else {
-		block.err = errors.New("unable to get session tracks")
-	}
-
-	block.items = append(block.items, st)
+	st.Tracks = []api.Track{session.Sequence[0].Track}
+	return st, nil
 }
 
 func (m *Model) loadLocalTracks(wg *sync.WaitGroup, block *menuBlock) {
@@ -370,4 +389,75 @@ func (m *Model) loadUserPlaylists(wg *sync.WaitGroup, block *menuBlock) {
 			})
 		}
 	}
+}
+
+func (m *Model) loadPinnedWaves(wg *sync.WaitGroup, block *menuBlock) {
+	defer wg.Done()
+
+	if m.client == nil {
+		return
+	}
+
+	pinnedWaves, err := m.client.PinnedWaves()
+	if err != nil {
+		block.err = err
+		return
+	}
+
+	items := make([]*playlist.Item, len(pinnedWaves))
+	var innerWg sync.WaitGroup
+	for i, pin := range pinnedWaves {
+		innerWg.Add(1)
+		go func(i int, pin api.PinInfo) {
+			defer innerWg.Done()
+			session, serr := m.client.RotorNewSessionSeeds(pin.Data.WaveSeeds())
+			if serr != nil {
+				log.Print(log.LVL_ERROR, "failed to init pinned wave [%s]: %s", pin.Data.WaveTitle(), serr)
+				return
+			}
+			item, ierr := rotorPlaylistItem(pin.Data.WaveTitle(), playlist.MYWAVE, true, session)
+			if ierr != nil {
+				log.Print(log.LVL_ERROR, "failed to init pinned wave [%s]: %s", pin.Data.WaveTitle(), ierr)
+				return
+			}
+			item.Header = string(pin.Data.Header)
+			items[i] = item
+		}(i, pin)
+	}
+	innerWg.Wait()
+
+	var waves []*playlist.Item
+	for _, item := range items {
+		if item != nil {
+			waves = append(waves, item)
+		}
+	}
+	if len(waves) == 0 {
+		return
+	}
+	block.items = append(block.items, pinnedWaveMenuItems(waves)...)
+}
+
+func pinnedWaveHeaderItem(header string) *playlist.Item {
+	return &playlist.Item{
+		Name:    " " + header,
+		Kind:    playlist.NONE,
+		Active:  false,
+		Subitem: true,
+	}
+}
+
+func pinnedWaveMenuItems(waves []*playlist.Item) []*playlist.Item {
+	if len(waves) == 0 {
+		return nil
+	}
+	out := make([]*playlist.Item, 0, 2+len(waves)*2)
+	out = append(out, playlist.ItemEmpty(), playlist.ItemCategory("pins:"))
+	for _, item := range waves {
+		out = append(out, item)
+		if item.Header != "" && item.Header != item.Name {
+			out = append(out, pinnedWaveHeaderItem(item.Header))
+		}
+	}
+	return out
 }

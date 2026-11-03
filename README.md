@@ -25,6 +25,7 @@ The easiest way to get a token is to use a browser extension ([Chrome](https://c
     - [x] Rewind
     - [x] Like/unlike
     - [x] Dislike
+    - [x] Mode (always on / when active)
     - [x] Share
     - [x] Synced lyrics
  - [ ] Radio
@@ -71,6 +72,7 @@ volume: 0.5
 volume-step: 0.05
 show-errors: false
 show-lyrics: false
+player-mode: when-active # always-on/when-active
 cache-tracks: likes # none/likes/all
 cache-dir: ""
 proxy: "" # proxy server URL; if not specified, uses the HTTP_PROXY and HTTPS_PROXY environment variables
@@ -115,6 +117,7 @@ controls:
    player-vol-down: '['
    player-toggle-lyrics: t
    player-hide: ctrl+p
+   player-mode: m
 style:
    volume-indicator-width: 16
    volume-indicator-autohide-at: 64

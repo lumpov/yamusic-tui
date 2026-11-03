@@ -120,6 +120,8 @@ func load() (Config, error) {
 		newConfig.VolumeStep = defaultConfig.VolumeStep
 	}
 
+	newConfig.PlayerMode = NormalizePlayerMode(newConfig.PlayerMode)
+
 	if newConfig.Search == nil {
 		search := *defaultConfig.Search
 		newConfig.Search = &search

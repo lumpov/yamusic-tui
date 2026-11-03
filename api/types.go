@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -342,9 +343,111 @@ type LikeAlbumInfo struct {
 	Timestamp string `json:"timestamp"`
 }
 
+type PinSeeds []string
+
+func (s *PinSeeds) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		*s = nil
+		return nil
+	}
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil {
+		*s = arr
+		return nil
+	}
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		if str == "" {
+			*s = nil
+			return nil
+		}
+		parts := strings.Split(str, ",")
+		out := make(PinSeeds, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				out = append(out, p)
+			}
+		}
+		*s = out
+		return nil
+	}
+	*s = nil
+	return nil
+}
+
+type PinHeader string
+
+func (h *PinHeader) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		*h = ""
+		return nil
+	}
+	var asString string
+	if err := json.Unmarshal(data, &asString); err == nil {
+		*h = PinHeader(asString)
+		return nil
+	}
+	var obj struct {
+		Title string `json:"title"`
+		Name  string `json:"name"`
+		Text  string `json:"text"`
+	}
+	if err := json.Unmarshal(data, &obj); err == nil {
+		switch {
+		case obj.Title != "":
+			*h = PinHeader(obj.Title)
+		case obj.Name != "":
+			*h = PinHeader(obj.Name)
+		default:
+			*h = PinHeader(obj.Text)
+		}
+		return nil
+	}
+	*h = ""
+	return nil
+}
+
 type PinData struct {
-	Id    uint64 `json:"id"`
-	Title string `json:"title"`
+	Id        uint64    `json:"id"`
+	Title     string    `json:"title"`
+	Name      string    `json:"name"`
+	StationId string    `json:"stationId"`
+	Seeds     PinSeeds  `json:"seeds"`
+	Header    PinHeader `json:"header"`
+}
+
+func (d PinData) WaveTitle() string {
+	if d.Title != "" {
+		return d.Title
+	}
+	if d.Name != "" {
+		return d.Name
+	}
+	if string(d.Header) != "" {
+		return string(d.Header)
+	}
+	if d.StationId != "" {
+		return d.StationId
+	}
+	if len(d.Seeds) > 0 {
+		return d.Seeds[0]
+	}
+	return "wave"
+}
+
+func (d PinData) WaveSeeds() []string {
+	if len(d.Seeds) > 0 {
+		return []string(d.Seeds)
+	}
+	if d.StationId != "" {
+		return []string{d.StationId}
+	}
+	return nil
+}
+
+func isWavePin(pin PinInfo) bool {
+	return pin.Type == "wave_item" || pin.Type == "wave"
 }
 
 type PinInfo struct {

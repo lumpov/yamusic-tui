@@ -72,11 +72,32 @@ func New(p *tea.Program) *Model {
 	return m
 }
 
+func modeView(width int) string {
+	inactive := lipgloss.NewStyle().Foreground(style.InactiveTextColor)
+	accent := lipgloss.NewStyle().Foreground(style.AccentColor)
+	always := inactive.Render("always on")
+	active := inactive.Render("when active")
+	if config.IsWhenActive() {
+		active = accent.Render("when active")
+	} else {
+		always = accent.Render("always on")
+	}
+	line := lipgloss.JoinHorizontal(
+		lipgloss.Left,
+		inactive.Render("mode: "),
+		always,
+		inactive.Render(" | "),
+		active,
+	)
+	return lipgloss.NewStyle().MaxWidth(width).Render(line)
+}
+
 func headerView(width int) string {
 	title := lipgloss.NewStyle().Foreground(style.AccentColor).MaxWidth(width).Render(config.AppTitle)
 	version := style.TrackVersionStyle.MaxWidth(width).Render(config.Version)
 	note := lipgloss.NewStyle().Foreground(style.InactiveTextColor).MaxWidth(width).Render(config.AppUnofficialNote)
-	return lipgloss.JoinVertical(lipgloss.Left, title, version, note)
+	mode := modeView(width)
+	return lipgloss.JoinVertical(lipgloss.Left, title, version, note, "", mode, "")
 }
 
 func (m *Model) Init() tea.Cmd {
@@ -138,6 +159,15 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 					break
 				}
 				m.list.CursorDown()
+			}
+			if item, ok := m.list.SelectedItem().(*Item); ok && !item.Active && item.Kind == NONE {
+				for m.list.Index() > 0 {
+					it, ok := m.list.SelectedItem().(*Item)
+					if ok && it.Active {
+						break
+					}
+					m.list.CursorUp()
+				}
 			}
 
 			cmds = append(cmds, cmd)

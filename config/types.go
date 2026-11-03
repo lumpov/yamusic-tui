@@ -118,6 +118,7 @@ type Controls struct {
 	PlayerVolDown        *Key `yaml:"player-vol-down"`
 	PlayerToggleLyrics   *Key `yaml:"player-toggle-lyrics"`
 	PlayerHide           *Key `yaml:"player-hide"`
+	PlayerMode           *Key `yaml:"player-mode"`
 }
 
 type Search struct {
@@ -135,6 +136,7 @@ type Config struct {
 	VolumeStep     float64   `yaml:"volume-step"`
 	SuppressErrors bool      `yaml:"suppress-errors"`
 	ShowLyrics     bool      `yaml:"show-lyrics"`
+	PlayerMode     string    `yaml:"player-mode"`
 	CacheTracks    CacheType `yaml:"cache-tracks"`
 	CacheDir       string    `yaml:"cache-dir"`
 	Proxy          string    `yaml:"proxy"`
@@ -151,6 +153,7 @@ var defaultConfig = Config{
 	Volume:         0.5,
 	VolumeStep:     0.05,
 	ShowLyrics:     false,
+	PlayerMode:     PlayerModeWhenActive,
 	CacheTracks:    CACHE_LIKED_ONLY,
 	CacheDir:       "",
 	SuppressErrors: false,
@@ -195,6 +198,7 @@ var defaultConfig = Config{
 		PlayerVolUp:              NewKey("]"),
 		PlayerVolDown:            NewKey("["),
 		PlayerHide:               NewKey("ctrl+p"),
+		PlayerMode:               NewKey("m"),
 	},
 	Style: &Style{
 		VolumeIndicatorWidth:    16,

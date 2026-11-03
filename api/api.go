@@ -472,12 +472,20 @@ func (client *YaMusicClient) StationFeedback(feedType string, stationId StationI
 	return
 }
 
-func (client *YaMusicClient) RotorNewSession(id StationId) (tracks StationTracks, err error) {
+func (client *YaMusicClient) RotorNewSession(id StationId) (StationTracks, error) {
+	return client.RotorNewSessionSeeds([]string{id.String()})
+}
+
+func (client *YaMusicClient) RotorNewSessionSeeds(seeds []string) (tracks StationTracks, err error) {
+	if len(seeds) == 0 {
+		err = errors.New("empty seeds")
+		return
+	}
 	body := map[string]interface{}{
 		"includeTracksInResponse": true,
 		"includeWaveModel":        false,
 		"interactive":             true,
-		"seeds":                   []string{id.String()},
+		"seeds":                   seeds,
 	}
 	tracks, _, err = postRequestJson[StationTracks](client.token,
 		"/rotor/session/new",
@@ -561,6 +569,19 @@ func (client *YaMusicClient) PinnedAlbums() (albums []PinInfo, err error) {
 	for _, pin := range desc.Pins {
 		if pin.Type == "album_item" {
 			albums = append(albums, pin)
+		}
+	}
+	return
+}
+
+func (client *YaMusicClient) PinnedWaves() (waves []PinInfo, err error) {
+	desc, _, err := getRequest[PinsDesc](client.token, "/pins", nil)
+	if err != nil {
+		return
+	}
+	for _, pin := range desc.Pins {
+		if isWavePin(pin) && len(pin.Data.WaveSeeds()) > 0 {
+			waves = append(waves, pin)
 		}
 	}
 	return

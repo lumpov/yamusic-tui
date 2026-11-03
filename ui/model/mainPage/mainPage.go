@@ -8,6 +8,7 @@ import (
 
 	"github.com/dece2183/yamusic-tui/api"
 	"github.com/dece2183/yamusic-tui/config"
+	"github.com/dece2183/yamusic-tui/idleprevent"
 	"github.com/dece2183/yamusic-tui/media/handler"
 	"github.com/dece2183/yamusic-tui/powerwatch"
 	"github.com/dece2183/yamusic-tui/ui/components/input"
@@ -98,6 +99,7 @@ func (m *Model) Run() error {
 	m.removeCoverFiles()
 	_, err := m.program.Run()
 	powerwatch.Stop()
+	idleprevent.Stop()
 	m.tracker.Stop()
 	m.removeCoverFiles()
 	return err

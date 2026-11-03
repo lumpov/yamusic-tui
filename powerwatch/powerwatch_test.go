@@ -22,4 +22,8 @@ func TestEventValues(t *testing.T) {
 	if DisplayOff == DisplayOn || SessionLocked == SessionUnlocked {
 		t.Fatal("power events must be distinct")
 	}
+	if DisplayOff.String() != "display-off" || DisplayOn.String() != "display-on" ||
+		SessionLocked.String() != "session-locked" || SessionUnlocked.String() != "session-unlocked" {
+		t.Fatalf("event names: %s %s %s %s", DisplayOff, DisplayOn, SessionLocked, SessionUnlocked)
+	}
 }

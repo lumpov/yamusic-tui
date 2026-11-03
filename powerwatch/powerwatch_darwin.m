@@ -45,11 +45,18 @@ static void *powerThreadMain(void *arg) {
         NSDistributedNotificationCenter *dist = [NSDistributedNotificationCenter defaultCenter];
         [dist addObserver:powerWatcher selector:@selector(screenLocked:) name:@"com.apple.screenIsLocked" object:nil];
         [dist addObserver:powerWatcher selector:@selector(screenUnlocked:) name:@"com.apple.screenIsUnlocked" object:nil];
+        NSRunLoop *rl = [NSRunLoop currentRunLoop];
+        NSPort *keep = [NSMachPort port];
+        [rl addPort:keep forMode:NSDefaultRunLoopMode];
         while (powerRunning) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
+            @autoreleasepool {
+                [rl runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
+            }
         }
         [ws removeObserver:powerWatcher];
         [dist removeObserver:powerWatcher];
+        [rl removePort:keep forMode:NSDefaultRunLoopMode];
+        [keep invalidate];
         powerWatcher = nil;
     }
     return NULL;

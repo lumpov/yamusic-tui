@@ -66,6 +66,7 @@ func Start() {
 		scope.SetTag("cgo", cgoEnabled())
 		scope.SetTag("num_cpu", strconv.Itoa(runtime.NumCPU()))
 		scope.SetTag("app_unofficial", config.AppUnofficialNote)
+		scope.SetTag("player_mode", config.Current.PlayerMode)
 		scope.SetContext("app", map[string]interface{}{
 			"name":              config.AppTitle,
 			"version":           config.Version,

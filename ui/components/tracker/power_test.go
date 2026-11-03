@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"io"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dece2183/yamusic-tui/config"
+	"github.com/dece2183/yamusic-tui/idleprevent"
 	"github.com/dece2183/yamusic-tui/powerwatch"
 	"github.com/dece2183/yamusic-tui/stream"
 )
@@ -85,6 +87,16 @@ func TestUnlockResumesAfterPowerPause(t *testing.T) {
 	}
 }
 
+func TestUnlockResumeWithoutPlayerClearsPowerPause(t *testing.T) {
+	m, _ := playingModel(t)
+	m.Update(powerwatch.DisplayOff)
+	m.player = nil
+	m.Update(powerwatch.SessionUnlocked)
+	if m.pausedByPower {
+		t.Fatal("unlock must clear pausedByPower when player is nil")
+	}
+}
+
 func TestUnlockDoesNotResumeUserPause(t *testing.T) {
 	m, _ := playingModel(t)
 	m.Pause()
@@ -129,5 +141,53 @@ func TestAlwaysOnToggleResumesPowerPause(t *testing.T) {
 	}
 	if m.paused {
 		t.Fatal("switching to always-on must resume")
+	}
+}
+
+func TestPowerResumeFadeInSevenSeconds(t *testing.T) {
+	m, fp := playingModel(t)
+	config.Current.Volume = 1
+	m.volume = 1
+	fp.volume = 1
+	m.Update(powerwatch.DisplayOff)
+	for i := 0; i < 80 && fp.playing; i++ {
+		m.volumeFadeTick()
+	}
+	if fp.playing {
+		t.Fatal("fade-out must finish")
+	}
+	m.Update(powerwatch.SessionUnlocked)
+	if fp.volume != 0 {
+		t.Fatalf("fade-in must start at 0, got %v", fp.volume)
+	}
+	n := 0
+	for n < 400 && fp.volume != m.volume {
+		m.volumeFadeTick()
+		n++
+	}
+	if fp.volume != m.volume {
+		t.Fatalf("fade-in did not reach target, ticks=%d vol=%v", n, fp.volume)
+	}
+	got := time.Duration(n) * _VOLUME_FADE_PERIOD
+	if got < 6*time.Second || got > 8*time.Second {
+		t.Fatalf("fade-in duration=%s ticks=%d, want ~7s", got, n)
+	}
+}
+
+func TestAlwaysOnPlayingAcquiresIdlePrevent(t *testing.T) {
+	t.Cleanup(func() { idleprevent.Set(false) })
+	m, _ := playingModel(t)
+	m.syncIdlePrevent()
+	if idleprevent.Held() {
+		t.Fatal("when-active must not hold idleprevent")
+	}
+	config.Current.PlayerMode = config.PlayerModeAlwaysOn
+	m.syncIdlePrevent()
+	if !idleprevent.Held() {
+		t.Fatal("always-on while playing must hold idleprevent")
+	}
+	m.Pause()
+	if idleprevent.Held() {
+		t.Fatal("pause must release idleprevent")
 	}
 }
